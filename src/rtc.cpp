@@ -9,9 +9,14 @@ static uint8_t dec_to_bcd(uint8_t d) { return ((d / 10) << 4) | (d % 10); }
 
 // only valid while TZ is UTC
 bool rtc_read(time_t *utc) {
-    Wire.beginTransmission(RTC_ADDR);
-    Wire.write(0x02);
-    uint8_t err = Wire.endTransmission(false);
+    uint8_t err = 0;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        Wire.beginTransmission(RTC_ADDR);
+        Wire.write(0x02);
+        err = Wire.endTransmission(false);
+        if (err == 0)
+            break;
+    }
     if (err != 0) {
         Serial.printf("RTC: no answer (error %u)\n", err);
         return false;
@@ -52,21 +57,23 @@ bool rtc_read(time_t *utc) {
 void rtc_write(time_t utc) {
     struct tm t;
     gmtime_r(&utc, &t);
+    uint8_t err = 0;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        Wire.beginTransmission(RTC_ADDR);
+        Wire.write(0x02);
+        Wire.write(dec_to_bcd(t.tm_sec));
+        Wire.write(dec_to_bcd(t.tm_min));
+        Wire.write(dec_to_bcd(t.tm_hour));
+        Wire.write(dec_to_bcd(t.tm_mday));
+        Wire.write(dec_to_bcd(t.tm_wday));
+        Wire.write(dec_to_bcd(t.tm_mon + 1));
+        Wire.write(dec_to_bcd(t.tm_year - 100));
+        err = Wire.endTransmission();
+        if (err == 0)
+            break;
+    }
 
-    Wire.beginTransmission(RTC_ADDR);
-    Wire.write(0x02);
-    Wire.write(dec_to_bcd(t.tm_sec));
-    Wire.write(dec_to_bcd(t.tm_min));
-    Wire.write(dec_to_bcd(t.tm_hour));
-    Wire.write(dec_to_bcd(t.tm_mday));
-    Wire.write(dec_to_bcd(t.tm_wday));
-    Wire.write(dec_to_bcd(t.tm_mon + 1));
-    Wire.write(dec_to_bcd(t.tm_year - 100));
-    uint8_t err = Wire.endTransmission();
     if (err != 0) {
         Serial.printf("RTC write error: %u\n", err);
-    } else {
-        Serial.printf("RTC set to %04d-%02d-%02d %02d:%02d:%02d UTC\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                      t.tm_hour, t.tm_min, t.tm_sec);
     }
 }

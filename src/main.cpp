@@ -20,6 +20,8 @@
 #include "screen_main.h"
 #include <sys/time.h>
 
+#include <ArduinoJson.h>
+
 LGFX gfx;
 
 uint16_t touch_x, touch_y;
@@ -71,25 +73,71 @@ bool i2cScanForAddress(uint8_t address) {
 
 // Wrapper function for sending I2C commands
 extern "C" void sendI2CCommand(uint8_t command) {
-    uint8_t error;
     // Start sending commands to the specified address
-    Wire.beginTransmission(0x30);
-    // Send command
-    Wire.write(command);
-    //  End transmission and return status
-    error = Wire.endTransmission();
+    uint8_t err = 0;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        Wire.beginTransmission(0x30);
+        // Send command
+        Wire.write(command);
+        //  End transmission and return status
+        err = Wire.endTransmission();
+        if (err == 0)
+            break;
+    }
 
-    if (error == 0) {
+    if (err == 0) {
         Serial.print("command 0x");
         Serial.print(command, HEX);
         Serial.println(" Sent successfully");
     } else {
         Serial.print("Command sent error, error code:");
-        Serial.println(error);
+        Serial.println(err);
+    }
+}
+
+static void handle_line(const char *line) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, line);
+    if (err) {
+        Serial.printf("bad line: %s\n", err.c_str());
+        return;
+    }
+    if (doc["epoch"].is<long long>()) {
+        long long epoch = doc["epoch"].as<long long>();
+        const char *tz = doc["tz"] | "";
+        clock_sync(epoch, tz);
+        Serial.printf("clock_sync(%lld, \"%s\")\n", epoch, tz);
+    } else {
+        Serial.println("bad line: no epoch");
+    }
+}
+
+static void serial_poll(void) {
+
+    static char line[512];
+    static size_t len = 0;
+
+    while (Serial.available() > 0) {
+        char c = Serial.read();
+        if (c == '\n' || c == '\r') {
+            line[len] = 0;
+            if (len > 0) {
+                Serial.printf("Serial command: %s\n", line);
+                len = 0;
+                handle_line(line);
+            }
+        } else if (len < sizeof(line) - 1) {
+            if (c >= 0x20 && c < 0x7F) // Only accept printable ASCII characters
+            {
+                line[len++] = c;
+            }
+        }
     }
 }
 
 void setup() {
+
+    Serial.setRxBufferSize(1024);
     Serial.begin(115200);
 
     Wire.begin(15, 16);
@@ -220,5 +268,6 @@ void setup() {
 
 void loop() {
     lv_timer_handler(); /* let the GUI do its work */
+    serial_poll();
     delay(1);
 }

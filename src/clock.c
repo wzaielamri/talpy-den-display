@@ -1,8 +1,24 @@
 #include "clock.h"
 #include "lvgl.h"
+#include "rtc.h"
 #include "screen_main.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+
+void clock_sync(long long epoch, const char *tz) {
+    struct timeval tv = {0};
+    tv.tv_sec = epoch;
+    settimeofday(&tv, NULL);
+
+    rtc_write((time_t)epoch);
+
+    if (tz && tz[0]) {
+        setenv("TZ", tz, 1);
+        tzset();
+    }
+}
 
 static void clock_tick(lv_timer_t *timer) {
     LV_UNUSED(timer);
@@ -11,8 +27,7 @@ static void clock_tick(lv_timer_t *timer) {
     char date_str[32];
     char weekday[12], month[12];
     time_t now = time(NULL);
-    if (now < 1700000000) {
-        ui_set_time("--:--", "---- --");
+    if (now < 1700000000) { // clock never set: the labels keep their start text "--:--"
         return;
     }
     struct tm tm;
