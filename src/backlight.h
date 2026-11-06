@@ -1,5 +1,5 @@
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>
 
 #define DIMMEST 244
 
@@ -11,9 +11,6 @@
 extern "C" {
 #endif
 
-#include "lvgl.h"
-
-static void set_backlight(int32_t x);
 void backlight_set_percent(int32_t percent);
 
 #ifdef __cplusplus

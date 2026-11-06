@@ -14,7 +14,8 @@ extern "C" {
 
 // SCREEN INIT
 void screen_main_create(void);
-void ui_event_Slider(lv_event_t *);
+
+void ui_set_time(const char *, const char *);
 
 #ifdef __cplusplus
 } /*extern "C"*/
