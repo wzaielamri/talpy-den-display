@@ -1,12 +1,12 @@
 #pragma once
-#include <time.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void clock_start(void);
-void clock_sync(long long epoch, const char *tz);
+#include "lvgl.h"
+
+void card_weather_create(lv_obj_t *parent);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

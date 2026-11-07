@@ -15,9 +15,13 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
-#include "clock.h"
-#include "rtc.h"
-#include "screen_main.h"
+#include "app/clock.h"
+#include "drivers/rtc.h"
+#include "ui/screen_main.h"
+#include "ui/card_brightness.h"
+#include "drivers/backlight.h"
+
+
 #include <sys/time.h>
 
 #include <ArduinoJson.h>
@@ -71,30 +75,6 @@ bool i2cScanForAddress(uint8_t address) {
     return (Wire.endTransmission() == 0);
 }
 
-// Wrapper function for sending I2C commands
-extern "C" void sendI2CCommand(uint8_t command) {
-    // Start sending commands to the specified address
-    uint8_t err = 0;
-    for (int attempt = 0; attempt < 2; ++attempt) {
-        Wire.beginTransmission(0x30);
-        // Send command
-        Wire.write(command);
-        //  End transmission and return status
-        err = Wire.endTransmission();
-        if (err == 0)
-            break;
-    }
-
-    if (err == 0) {
-        Serial.print("command 0x");
-        Serial.print(command, HEX);
-        Serial.println(" Sent successfully");
-    } else {
-        Serial.print("Command sent error, error code:");
-        Serial.println(err);
-    }
-}
-
 static void handle_line(const char *line) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, line);
@@ -113,10 +93,8 @@ static void handle_line(const char *line) {
 }
 
 static void serial_poll(void) {
-
     static char line[512];
     static size_t len = 0;
-
     while (Serial.available() > 0) {
         char c = Serial.read();
         if (c == '\n' || c == '\r') {
@@ -259,7 +237,7 @@ void setup() {
     lv_indev_set_read_cb(indev, my_touchpad_read);
 
     delay(100);
-
+    card_brightness_set_callback(backlight_set_percent);  
     screen_main_create();
     clock_start();
 

@@ -12,7 +12,6 @@ ser.open()
 with open("/etc/localtime", "rb") as f:
     tz = f.read().strip().split(b"\n")[-1].decode()
 
-time.sleep(2)  # let the board finish booting, in case opening the port reset it
 ser.reset_input_buffer()
 ser.write(b"\n")
 

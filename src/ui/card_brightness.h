@@ -1,0 +1,15 @@
+#pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "lvgl.h"
+
+typedef void (*brightness_cb_t)(int32_t percent);
+void card_brightness_set_callback(brightness_cb_t cb);
+
+void card_brightness_create(lv_obj_t *parent);
+
+#ifdef __cplusplus
+} /*extern "C"*/
+#endif

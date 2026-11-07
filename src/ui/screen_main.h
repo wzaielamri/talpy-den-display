@@ -2,23 +2,15 @@
 // SquareLine Studio version: SquareLine Studio 1.5.3
 // LVGL version: 9.1.0
 // Project name: advance-3-big
-
-#ifndef _ADVANCE_3_BIG_UI_H
-#define _ADVANCE_3_BIG_UI_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "lvgl.h"
-
 // SCREEN INIT
 void screen_main_create(void);
 
-void ui_set_time(const char *, const char *);
-
 #ifdef __cplusplus
 } /*extern "C"*/
-#endif
-
 #endif

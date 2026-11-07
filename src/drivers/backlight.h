@@ -11,7 +11,9 @@
 extern "C" {
 #endif
 
+
 void backlight_set_percent(int32_t percent);
+void sendI2CCommand(uint8_t command);
 
 #ifdef __cplusplus
 } /*extern "C"*/
