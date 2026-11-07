@@ -1,8 +1,7 @@
-#include "card_brightness.h"
+#include "card_weather.h"
 #include "theme.h"
-#include <stdio.h>
+#include "ui_common.h"
 
-static lv_obj_t *ui_Slider = NULL;
 static lv_obj_t *wx_sun;
 static lv_obj_t *wx_cloud_base;
 static lv_obj_t *wx_cloud_a;
@@ -13,77 +12,38 @@ static lv_obj_t *wx_cond;
 static lv_obj_t *wx_hilo;
 static lv_obj_t *wx_note;
 
-static void ui_set_weather_value_text(int32_t value) {
-    char buf[8];
-    snprintf(buf, sizeof buf, "%ld°", (long)value);
-    lv_label_set_text(wx_temp, buf);
-    lv_obj_t *card_brightness = lv_obj_get_parent(wx_temp);
-    lv_obj_align_to(wx_temp, card_brightness, LV_ALIGN_TOP_RIGHT, 0, 0);
+void card_weather_set(int temp, int hi, int lo, const char *condition, const char *updated) {
+    if (!wx_temp) return; // card not created yet
+    lv_label_set_text_fmt(wx_temp, "%d°", temp);
+    lv_label_set_text(wx_cond, condition ? condition : "--");
+    lv_label_set_text_fmt(wx_hilo, LV_SYMBOL_UP " %d°   " LV_SYMBOL_DOWN " %d°", hi, lo);
+    lv_label_set_text_fmt(wx_note, "Open-Meteo " LV_SYMBOL_BULLET " %s", updated ? updated : "--:--");
 }
 
 void card_weather_create(lv_obj_t *parent){
 
-    wx_title = lv_label_create(parent);
-    lv_obj_set_style_text_font(wx_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(wx_title, lv_color_hex(COLOR_MUTED), 0);
-    lv_obj_align_to(wx_title, parent, LV_ALIGN_TOP_LEFT, 0, 0);
-    lv_label_set_text(wx_title, "WEATHER");
+    wx_title = make_card_title(parent, "WEATHER");
 
+    wx_temp = make_label(parent, &lv_font_montserrat_48, COLOR_TEXT, "");
+    lv_obj_align(wx_temp, LV_ALIGN_TOP_LEFT, 0, 32);
 
-    wx_temp = lv_label_create(parent);
-    lv_obj_set_style_text_font(wx_temp, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(wx_temp, lv_color_hex(COLOR_TEXT), 0);
-    lv_obj_align_to(wx_temp, parent, LV_ALIGN_TOP_LEFT, 0, 32);
-    lv_label_set_text(wx_temp, "2°");
+    wx_cond = make_label(parent, &lv_font_montserrat_24, COLOR_TEXT, "");
+    lv_obj_align(wx_cond, LV_ALIGN_TOP_LEFT, 0, 92);
 
-    wx_cond = lv_label_create(parent);
-    lv_obj_set_style_text_font(wx_cond, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(wx_cond, lv_color_hex(COLOR_TEXT), 0);
-    lv_obj_align_to(wx_cond, parent, LV_ALIGN_TOP_LEFT, 0, 92);
-    lv_label_set_text(wx_cond, "Partly Cloudy");
+    wx_hilo = make_label(parent, &lv_font_montserrat_24, COLOR_MUTED, "");
+    lv_obj_align(wx_hilo, LV_ALIGN_TOP_LEFT, 0, 128);
 
+    wx_note = make_label(parent, &lv_font_montserrat_14, COLOR_DIM, "");
+    lv_obj_align(wx_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    wx_note = lv_label_create(parent);
-    lv_obj_set_style_text_font(wx_note, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(wx_note, lv_color_hex(COLOR_DIM), 0);
-    lv_obj_align_to(wx_note, parent, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_label_set_text(wx_note, "Open-Meteo . --:--");
+    // Partly-cloudy icon. Order matters: later shapes are drawn on top,
+    // so the sun goes first and the clouds cover its lower half.
+    //                            x    y   w   h   radius            color
+    wx_sun        = make_blob(parent, 176, 18, 52, 52, LV_RADIUS_CIRCLE, COLOR_SUN);
+    wx_cloud_base = make_blob(parent, 150, 62, 88, 34, 17,               COLOR_CLOUD);
+    wx_cloud_a    = make_blob(parent, 162, 46, 40, 40, LV_RADIUS_CIRCLE, COLOR_CLOUD);
+    wx_cloud_b    = make_blob(parent, 190, 36, 48, 48, LV_RADIUS_CIRCLE, COLOR_CLOUD);
 
-    wx_sun = lv_obj_create(parent);
-    lv_obj_set_size(wx_sun, 52, 52);
-    lv_obj_set_style_bg_color(wx_sun, lv_color_hex(COLOR_SUN), 0);
-    lv_obj_align_to(wx_sun, parent, LV_ALIGN_TOP_LEFT, 176, 18);
-    lv_obj_set_style_radius(wx_sun, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(wx_sun, 0, 0);
-    lv_obj_remove_flag(wx_sun, LV_OBJ_FLAG_SCROLLABLE);
-
-
-
-    wx_cloud_a = lv_obj_create(parent);
-    lv_obj_set_size(wx_cloud_a, 40, 40);
-    lv_obj_set_style_bg_color(wx_cloud_a, lv_color_hex(COLOR_CLOUD), 0);
-    lv_obj_align_to(wx_cloud_a, parent, LV_ALIGN_TOP_LEFT, 162, 46);
-    lv_obj_set_style_radius(wx_cloud_a, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(wx_cloud_a, 0, 0);
-    lv_obj_remove_flag(wx_cloud_a, LV_OBJ_FLAG_SCROLLABLE);
-
-
-
-    wx_cloud_b = lv_obj_create(parent);
-    lv_obj_set_size(wx_cloud_b, 48, 48);
-    lv_obj_set_style_bg_color(wx_cloud_b, lv_color_hex(COLOR_CLOUD), 0);
-    lv_obj_align_to(wx_cloud_b, parent, LV_ALIGN_TOP_LEFT, 190, 36);
-    lv_obj_set_style_radius(wx_cloud_b, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(wx_cloud_b, 0, 0);
-    lv_obj_remove_flag(wx_cloud_b, LV_OBJ_FLAG_SCROLLABLE);
-    
-    wx_cloud_base = lv_obj_create(parent);
-    lv_obj_set_size(wx_cloud_base, 88, 34);
-    lv_obj_set_style_bg_color(wx_cloud_base, lv_color_hex(COLOR_CLOUD), 0);
-    lv_obj_align_to(wx_cloud_base, parent, LV_ALIGN_TOP_LEFT, 150, 62);
-    lv_obj_set_style_radius(wx_cloud_base, 17, 0);
-    lv_obj_set_style_border_width(wx_cloud_base, 0, 0);
-    lv_obj_remove_flag(wx_cloud_base, LV_OBJ_FLAG_SCROLLABLE);
-    
-
+    // Made-up values from the design page until the PC sends real ones (plan step 8).
+    card_weather_set(12, 14, 7, "Partly cloudy", "14:45");
 }
