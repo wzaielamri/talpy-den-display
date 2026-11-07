@@ -1,11 +1,8 @@
 #include "card_weather.h"
 #include "theme.h"
 #include "ui_common.h"
+#include "weather_icon.h"
 
-static lv_obj_t *wx_sun;
-static lv_obj_t *wx_cloud_base;
-static lv_obj_t *wx_cloud_a;
-static lv_obj_t *wx_cloud_b;
 static lv_obj_t *wx_title;
 static lv_obj_t *wx_temp;
 static lv_obj_t *wx_cond;
@@ -36,14 +33,39 @@ void card_weather_create(lv_obj_t *parent){
     wx_note = make_label(parent, &lv_font_montserrat_14, COLOR_DIM, "");
     lv_obj_align(wx_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Partly-cloudy icon. Order matters: later shapes are drawn on top,
-    // so the sun goes first and the clouds cover its lower half.
-    //                            x    y   w   h   radius            color
-    wx_sun        = make_blob(parent, 176, 18, 52, 52, LV_RADIUS_CIRCLE, COLOR_SUN);
-    wx_cloud_base = make_blob(parent, 150, 62, 88, 34, 17,               COLOR_CLOUD);
-    wx_cloud_a    = make_blob(parent, 162, 46, 40, 40, LV_RADIUS_CIRCLE, COLOR_CLOUD);
-    wx_cloud_b    = make_blob(parent, 190, 36, 48, 48, LV_RADIUS_CIRCLE, COLOR_CLOUD);
+    // Top-right corner, above the condition text. Its partly-cloudy icon puts the sun and
+    // cloud exactly where the design page has them.
+    weather_icon_create(parent, 140, 0);
 
     // Made-up values from the design page until the PC sends real ones (plan step 8).
     card_weather_set(12, 14, 7, "Partly cloudy", "14:45");
+    weather_icon_set(2, true);
+}
+
+// ---------- demo: every icon in turn, to check them on the board ----------
+
+typedef struct {
+    int code;
+    bool day;
+    const char *name;
+} wx_demo_t;
+
+static const wx_demo_t demo[] = {
+    {0, true, "Clear"},          {0, false, "Clear night"}, {2, true, "Partly cloudy"},
+    {2, false, "Cloudy night"},  {3, true, "Overcast"},     {45, true, "Fog"},
+    {53, true, "Drizzle"},       {63, true, "Rain"},        {73, true, "Snow"},
+    {95, true, "Thunderstorm"},
+};
+
+static void demo_tick(lv_timer_t *timer) {
+    LV_UNUSED(timer);
+    static unsigned i = 0;
+    weather_icon_set(demo[i].code, demo[i].day);
+    lv_label_set_text(wx_cond, demo[i].name);
+    i = (i + 1) % (sizeof demo / sizeof demo[0]);
+}
+
+void card_weather_demo_start(void) {
+    lv_timer_create(demo_tick, 4000, NULL);
+    demo_tick(NULL);
 }

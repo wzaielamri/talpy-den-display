@@ -15,6 +15,8 @@
 #define COLOR_ALERT   0x3A2C12
 #define COLOR_SUN     0xFFCF5A
 #define COLOR_CLOUD   0xC9D2DD
+#define COLOR_MOON    0xE6E0C8 // weather icon: moon (not on the design page)
+#define COLOR_RAIN    0x7DB8FF // weather icon: raindrops (not on the design page)
 
 // Theme sizes
 #define CARD_RADIUS 16
