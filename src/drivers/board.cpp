@@ -2,7 +2,18 @@
 
 #include <Wire.h>
 #include <Arduino.h>
+#include <driver/uart.h>
+#include <esp_sleep.h>
 #include "drivers/backlight.h"
+
+bool board_nap(uint32_t ms) {
+    Serial.flush(); // what's being sent goes out first: the UART stops while asleep
+    esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000);
+    uart_set_wakeup_threshold(UART_NUM_0, 3); // 3 edges on RX: the first byte of a message
+    esp_sleep_enable_uart_wakeup(UART_NUM_0);
+    esp_light_sleep_start();
+    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UART;
+}
 
 
 static bool i2cScanForAddress(uint8_t address) {

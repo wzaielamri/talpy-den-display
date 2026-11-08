@@ -80,7 +80,8 @@ code, .mono { font-family: var(--f-mono); font-size: 0.92em; }
 .lbl.cut { overflow: hidden; text-overflow: ellipsis; }
 .sym { display: inline-block; width: 0.95em; height: 0.95em; vertical-align: -0.12em; }
 .boxes .el { outline: 1px dashed rgba(122, 200, 255, 0.75); outline-offset: -1px; }
-.el.pick { outline: 2px solid #ff4fd8 !important; outline-offset: 1px; z-index: 50; }
+.el.pick { outline: 2px solid #ff4fd8 !important; outline-offset: 1px; }   /* (no z-index: a card would cover its own labels) */
+body.png .el.pick { outline: none !important; }
 .caption { color: var(--soft); font-size: 13px; margin-top: 10px; }
 
 /* spec */
@@ -108,6 +109,10 @@ tr[data-id]:hover, tr.pick { background: var(--hi); }
 .fonts td:first-child { font-family: var(--f-mono); }
 @media (prefers-reduced-motion: no-preference) { .seg button { transition: background 0.12s; } }
 .el.tap { cursor: pointer; }
+/* the waiting tile's border breathes while a job waits, as on the board */
+@keyframes wait-pulse { 50% { box-shadow: inset 0 0 0 2px rgba(255, 181, 71, 0.2); } }
+@media (prefers-reduced-motion: no-preference) { .el.pulse { animation: wait-pulse 1.8s ease-in-out infinite; } }
+body.png .el.pulse { animation: none; }
 /* picture export: #png-normal, #png-hourly or #png-alert shows the screen alone at 800×480 */
 body.png { padding: 0; background: #0e1116; }
 body.png main { display: block; max-width: none; }
@@ -120,7 +125,7 @@ body.png .wrap { width: 800px; border-radius: 0; }
 <main>
   <header>
     <h1>Desk Display Layout</h1>
-    <p class="lede">The 800 × 480 CrowPanel screen for your clock, weather and Claude jobs, drawn with LVGL's own Montserrat sizes so text takes the room it will take on the board. Build the normal screen in step 5. Tapping the weather card opens the hourly forecast, which gets real data in step 8. The alert is for step 9.</p>
+    <p class="lede">The 800 × 480 CrowPanel screen for your clock, weather and Claude jobs, drawn with LVGL's own Montserrat sizes so text takes the room it will take on the board. Build the normal screen in step 5. Tapping the weather card opens the hourly forecast, which gets real data in step 8; a swipe down from the top brings the brightness. The alert is for step 9.</p>
   </header>
 
   <section aria-label="Screen preview">
@@ -128,7 +133,9 @@ body.png .wrap { width: 800px; border-radius: 0; }
       <div class="seg" role="group" aria-label="Screen">
         <button type="button" id="btn-main" aria-pressed="true">Normal</button>
         <button type="button" id="btn-hourly" aria-pressed="false">Hourly (tap weather)</button>
-        <button type="button" id="btn-alert" aria-pressed="false">Alert (step 9)</button>
+        <button type="button" id="btn-shade" aria-pressed="false">Pull-down</button>
+        <button type="button" id="btn-alert" aria-pressed="false">Alert: waiting</button>
+        <button type="button" id="btn-done" aria-pressed="false">Alert: finished</button>
       </div>
       <label class="check" for="show-boxes"><input type="checkbox" id="show-boxes"> Show every box</label>
     </div>
@@ -165,8 +172,9 @@ body.png .wrap { width: 800px; border-radius: 0; }
         <li>Three empty cards in their places. Check the gaps on the board before anything else.</li>
         <li>Header: clock, date, the PC pill.</li>
         <li>Weather card: the labels, then <code>weather_icon_create</code> last (later objects draw on top).</li>
-        <li>Brightness card with your slider and its curve.</li>
+        <li>Usage card: the title and the two column heads, then one account's line (name, two bars, two %), made twice.</li>
         <li>Jobs card: one row first, then make a function that builds a row and call it four times.</li>
+        <li>Pull-down panel on <code>lv_layer_top()</code>: the zone over the header, then the scrim, then the panel with your brightness slider in it.</li>
         <li>Hourly forecast: one more card over the three, hidden until the weather card is tapped. Columns first, the temperature line last.</li>
         <li>Step 9: the alert goes on <code>lv_layer_top()</code>, so it covers the whole screen.</li>
       </ol>
@@ -223,9 +231,12 @@ const SYM = {
   DOWN: '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5 8 10l4.5-4.5"/></svg>',
   BELL: '<svg class="sym" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5c-2.5 0-4.2 1.9-4.2 4.4v2.6L2.4 11h11.2l-1.4-2.5V5.9C12.2 3.4 10.5 1.5 8 1.5Z"/><path d="M6.2 12.2h3.6a1.8 1.8 0 0 1-3.6 0Z"/></svg>'
 };
+SYM.OK = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>';
+SYM.EYE = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
+SYM.REFRESH = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/></svg>';
 SYM.LEFT = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5"/></svg>';
 SYM.RIGHT = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>';
-const withSym = t => t.replace(/\{(USB|UP|DOWN|BELL|LEFT|RIGHT)\}/g, (_, k) => SYM[k]);
+const withSym = t => t.replace(/\{(USB|UP|DOWN|BELL|LEFT|RIGHT|REFRESH|EYE|OK)\}/g, (_, k) => SYM[k]);
 
 /* The weather pictures from src/ui/weather_icon.c, at rest, in their 104 × 96 box. */
 const CLOUD = (x, y, c) => [
@@ -279,11 +290,17 @@ el({ s: "main", id: "pc_pill", widget: "obj", parent: "screen", d: { x: 616, y: 
      note: "Radius LV_RADIUS_CIRCLE, border 0, padding 0. Offline: background tile, text muted, “PC offline”." });
 el({ s: "main", id: "pc_text", widget: "label", parent: "pc_pill", text: "{USB} PC connected", font: 14, color: "done",
      d: { cx: 700, cy: 40 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_USB \" PC connected\"" });
+el({ s: "main", id: "pull_zone", widget: "obj", parent: "lv_layer_top()", d: { x: 0, y: 0, w: 800, h: 72 },
+     place: "TOP_LEFT 0, 0", size: "800 × 72",
+     note: "Invisible (lv_obj_remove_style_all), clickable, no scrolling or scroll chain. A pull down from here (LV_EVENT_PRESSING, once the finger has moved 6 px) dims the screen and brings the panel with the finger, its bottom edge 16 px under it; let go past a third of the way and it opens, else it goes back up. Touch and drawing run every 16 ms (LV_DEF_REFR_PERIOD in lv_conf.h). Nothing under it takes taps." });
+el({ s: "main", id: "pull_hint", widget: "obj", parent: "pull_zone", d: { x: 380, y: 6, w: 40, h: 4 },
+     style: { background: col("line"), borderRadius: "2px" }, place: "TOP_MID 0, 6", size: "40 × 4", color: "line",
+     note: "Radius LV_RADIUS_CIRCLE, not clickable: says something pulls down from there." });
 
 el({ s: "main", group: "Weather card" });
-el({ s: "main", id: "card_wx", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 88, w: 280, h: 256 },
-     place: "TOP_LEFT 16, 88", size: "280 × 256", color: "card",
-     note: "Card style: radius 16, padding 20. Tap (LV_EVENT_CLICKED): show card_hourly. Pressed: background tile. Shapes from make_blob are clickable and would catch the tap, so remove LV_OBJ_FLAG_CLICKABLE from them." });
+el({ s: "main", id: "card_wx", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 88, w: 280, h: 220 },
+     place: "TOP_LEFT 16, 88", size: "280 × 220", color: "card",
+     note: "Card style: radius 16, padding 20. Inner area 240 × 180: the note right under the high and low. Tap (LV_EVENT_CLICKED): show card_hourly. Pressed: background tile. Shapes from make_blob aren't clickable, so a tap on the icon reaches the card." });
 el({ s: "main", id: "wx_title", widget: "label", parent: "card_wx", text: "WEATHER", font: 14, color: "muted", ls: 1,
      d: { x: 36, y: 108 }, place: "TOP_LEFT 0, 0", size: "auto", note: "text_letter_space 1" });
 el({ s: "main", id: "wx_temp", widget: "label", parent: "card_wx", text: "12°", font: 48, color: "text",
@@ -293,23 +310,43 @@ el({ s: "main", id: "wx_cond", widget: "label", parent: "card_wx", text: "Partly
 el({ s: "main", id: "wx_hilo", widget: "label", parent: "card_wx", text: "{UP} 14°&nbsp;&nbsp;&nbsp;{DOWN} 7°", font: 24, color: "muted",
      d: { x: 36, y: 236 }, place: "TOP_LEFT 0, 128", size: "auto", note: "LV_SYMBOL_UP / LV_SYMBOL_DOWN in the same label: today's high and low." });
 el({ s: "main", id: "wx_note", widget: "label", parent: "card_wx", text: "Open-Meteo • 14:45", font: 14, color: "dim",
-     d: { x: 36, y: 308 }, place: "BOTTOM_LEFT 0, 0", size: "auto", note: "When the weather was last fetched." });
+     d: { x: 36, y: 272 }, place: "BOTTOM_LEFT 0, 0", size: "auto", note: "When the weather was last fetched." });
 el({ s: "main", id: "wx_more", widget: "label", parent: "card_wx", text: "Hourly {RIGHT}", font: 14, color: "muted",
-     d: { r: 276, y: 308 }, place: "BOTTOM_RIGHT 0, 0", size: "auto", note: "Shows the card can be tapped. LV_SYMBOL_RIGHT." });
+     d: { r: 276, y: 272 }, place: "BOTTOM_RIGHT 0, 0", size: "auto", note: "Shows the card can be tapped. LV_SYMBOL_RIGHT." });
 el({ s: "main", id: "wx_icon", widget: "obj", parent: "card_wx", d: { x: 176, y: 108, w: 104, h: 96 },
      icon: { code: 2, day: true, bg: "card", scale: 1 }, place: "TOP_LEFT 140, 0", size: "104 × 96",
-     note: "weather_icon_create(card_wx, 140, 0), created last so it draws on top. Animated on the board, drawn here at rest." });
+     note: "weather_icon_create(card_wx, 140, 0), created last so it draws on top. Animated on the board, drawn here at rest; held still while the pull-down panel is out (weather_icon_freeze), as something moving under its dimming showed through undimmed." });
 
-el({ s: "main", group: "Brightness card" });
-el({ s: "main", id: "card_br", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 360, w: 280, h: 104 },
-     place: "TOP_LEFT 16, 360", size: "280 × 104", color: "card", note: "Card style." });
-el({ s: "main", id: "br_title", widget: "label", parent: "card_br", text: "BRIGHTNESS", font: 14, color: "muted", ls: 1,
-     d: { x: 36, y: 380 }, place: "TOP_LEFT 0, 0", size: "auto" });
-el({ s: "main", id: "br_value", widget: "label", parent: "card_br", text: "72%", font: 14, color: "text",
-     d: { r: 276, y: 380 }, place: "TOP_RIGHT 0, 0", size: "auto", note: "Updated in the slider's event." });
-el({ s: "main", id: "br_slider", widget: "slider", parent: "card_br", d: { x: 36, y: 418, w: 240, h: 10 }, value: 72,
-     place: "TOP_LEFT 0, 38", size: "240 × 10", color: "tile",
-     note: "MAIN: tile. INDICATOR: text. KNOB: white, pad 9 (28 px knob). ext_click_area 20. Range 0–100 with your curve." });
+el({ s: "main", group: "Usage card" });
+el({ s: "main", id: "card_use", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 324, w: 280, h: 140 },
+     place: "TOP_LEFT 16, 324", size: "280 × 140", color: "card", note: "Card style. Inner area 240 × 100. Brightness moved to the pull-down panel." });
+el({ s: "main", id: "use_title", widget: "label", parent: "card_use", text: "USAGE", font: 14, color: "muted", ls: 1,
+     d: { x: 36, y: 344 }, place: "TOP_LEFT 0, 0", size: "auto", note: "text_letter_space 1" });
+el({ s: "main", id: "use_head_5h", widget: "label", parent: "card_use", text: "5h", font: 14, color: "dim",
+     d: { x: 108, y: 344 }, place: "TOP_LEFT 72, 0", size: "auto", note: "Over the 5-hour window's column." });
+el({ s: "main", id: "use_head_7d", widget: "label", parent: "card_use", text: "7d", font: 14, color: "dim",
+     d: { x: 196, y: 344 }, place: "TOP_LEFT 160, 0", size: "auto", note: "Over the week's column." });
+const usage = [{ name: "personal", plan: "Pro", h5: 40, d7: 84, r5: "18:00", r7: "Tue" },
+               { name: "work", plan: "Team", h5: 12, d7: 100, r5: "17:00", r7: "Mon" }];
+usage.forEach((u, i) => {
+  const y = 370 + 40 * i, iy = 26 + 40 * i, first = i === 0, tag = first ? "" : "_" + (i + 1), lvl = p => (p >= 80 ? "wait" : "work");
+  el({ s: "main", id: "use_name" + tag, widget: "label", parent: "card_use", spec: first, text: u.name, font: 14, color: "text", cut: true,
+       d: { x: 36, y, w: 64 }, place: "TOP_LEFT 0, " + iy, size: "64 × 16",
+       note: "The account. LV_LABEL_LONG_DOT. Account 2: y 66. Room for 2 accounts; the PC picks which come first." });
+  el({ s: "main", id: "use_plan" + tag, widget: "label", parent: "card_use", spec: first, text: u.plan, font: 14, color: "dim", cut: true,
+       d: { x: 36, y: y + 18, w: 64 }, place: "TOP_LEFT 0, " + (iy + 18), size: "64 × 16", note: "Its plan, as Talpy Den names it." });
+  [["5h", u.h5, u.r5, 108, 188], ["7d", u.d7, u.r7, 196, 276]].forEach(([w, p, r, bx, pr], c) => {
+    el({ s: "main", id: "use_bar_" + w + tag, widget: "bar", parent: "card_use", spec: first, value: p, track: "tile", fill: lvl(p),
+         d: { x: bx, y: y + 5, w: 36, h: 6 }, place: "TOP_LEFT " + (72 + 88 * c) + ", " + (iy + 5), size: "36 × 6", color: lvl(p),
+         note: "lv_bar 0–100, no padding (lv_obj_remove_style_all). MAIN: tile. INDICATOR: working colour, waiting colour from 80%. Both radius 3." });
+    el({ s: "main", id: "use_pct_" + w + tag, widget: "label", parent: "card_use", spec: first, text: p + "%", font: 14, color: p >= 80 ? "wait" : "text",
+         d: { r: pr, y }, place: "TOP_LEFT " + (110 + 88 * c) + ", " + iy, size: "42 × 16",
+         note: "Text align right; 42 wide, as “100%” takes ~38 px and a narrower label wraps the “%” onto a line of its own. Waiting colour from 80%. “--” in muted while the PC hasn't said." });
+    el({ s: "main", id: "use_reset_" + w + tag, widget: "label", parent: "card_use", spec: first, text: "{REFRESH} " + r, font: 14, color: "dim", cut: true,
+         d: { x: bx, y: y + 18, w: 80 }, place: "TOP_LEFT " + (72 + 88 * c) + ", " + (iy + 18), size: "80 × 16",
+         note: "When the window starts again: LV_SYMBOL_REFRESH and its time if that's within a day, else its day (“Tue”). Nothing while not known." });
+  });
+});
 
 el({ s: "main", group: "Jobs card" });
 el({ s: "main", id: "card_jobs", widget: "obj", parent: "screen", card: true, d: { x: 312, y: 88, w: 472, h: 376 },
@@ -328,38 +365,42 @@ tiles.forEach(t => {
   el({ s: "main", id: "tile_" + t.id, widget: "obj", parent: "card_jobs", d: { x: ax, y: ay, w: 136, h: 88 },
        style: Object.assign({ background: col("tile"), borderRadius: "12px" }, t.id === "wait" ? { boxShadow: "inset 0 0 0 2px " + col("wait") } : {}),
        place: "TOP_LEFT " + t.x + ", 28", size: "136 × 88", color: "tile",
-       note: t.id === "wait" ? "Radius 12, padding 12. Border 2 px waiting colour while the count is above 0." : "Radius 12, padding 12, border 0." });
+       cls: t.id === "wait" ? "pulse" : undefined,
+       note: t.id === "wait" ? "Radius 12, padding 10 (12 less the border). Border 2 px waiting colour while the count is above 0, its opacity breathing on a cosine (full → 20% → full in 1.8 s, linear over 0–360°, the end of one breath exactly the start of the next: no turning point to jump at), so a job waiting for you catches the eye. Held at full while the pull-down panel is out; gone at 0." : "Radius 12, padding 12, border 0." });
   el({ s: "main", id: "tile_" + t.id + "_num", widget: "label", parent: "tile_" + t.id, text: t.n, font: 40, color: t.c,
        d: { x: ax + 12, y: ay + 12 }, place: "TOP_LEFT 0, 0", size: "auto" });
   el({ s: "main", id: "tile_" + t.id + "_cap", widget: "label", parent: "tile_" + t.id, text: t.cap, font: 14, color: "muted",
        d: { x: ax + 12, y: ay + 60 }, place: "TOP_LEFT 0, 48", size: "auto" });
 });
 const jobs = [
-  { name: "desk-display-gadget", st: "waiting • 3m", c: "wait" },
-  { name: "quick-chat-next", st: "working • 12m", c: "work" },
-  { name: "fix-serial-parser", st: "working • 41m", c: "work" },
-  { name: "release-notes", st: "done • 5m ago", c: "done" }
+  { name: "desk-display-gadget", st: "waiting • 3m", c: "wait", m: "local" },
+  { name: "quick-chat-next", st: "working • 12m", c: "work", m: "local" },
+  { name: "fix-serial-parser", st: "working • 41m", c: "work", m: "lab (ssh)" },
+  { name: "release-notes", st: "done • 5m ago", c: "done", m: "local" }
 ];
 jobs.forEach((j, i) => {
   const ry = 232 + 48 * i, first = i === 0, tag = first ? "" : "_" + (i + 1);
   el({ s: "main", id: "row" + tag || "row", widget: "obj", parent: "card_jobs", spec: first, d: { x: 332, y: ry, w: 432, h: 48 },
-       style: i < 3 ? { boxShadow: "inset 0 -1px 0 " + col("line") } : {},
+       style: { boxShadow: "inset 0 -1px 0 " + col("line") },   // (all four: "+1 more" shows under the last)
        place: "TOP_LEFT 0, " + (124 + 48 * i), size: "432 × 48", color: "line",
-       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row. Rows 2–4: y 172, 220, 268. Waiting jobs first, then working, then done." });
+       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row unless “+N more” shows under it. Rows 2–4: y 172, 220, 268. Waiting jobs first, then working, then done." });
   el({ s: "main", id: "row_dot" + tag, widget: "obj", parent: "row", spec: first, d: { x: 332, y: ry + 18, w: 12, h: 12 }, round: true,
        style: { background: col(j.c) }, place: "TOP_LEFT 0, 18", size: "12 × 12", color: j.c, note: "Circle in the job's state colour." });
   el({ s: "main", id: "row_name" + tag, widget: "label", parent: "row", spec: first, text: j.name, font: 24, color: "text", cut: true,
-       d: { x: 356, y: ry + 10, w: 280 }, place: "TOP_LEFT 24, 10", size: "280 × auto",
-       note: "Long mode LV_LABEL_LONG_DOT, so a long name ends in …" });
+       d: { x: 356, y: ry + 4, w: 280 }, place: "TOP_LEFT 24, 4", size: "280 × auto",
+       note: "Long mode LV_LABEL_LONG_DOT, so a long name ends in … At TOP_LEFT 24, 10 when the row has no machine line." });
+  el({ s: "main", id: "row_machine" + tag, widget: "label", parent: "row", spec: first, text: j.m, font: 14, color: "muted", cut: true,
+       d: { x: 356, y: ry + 29, w: 280 }, place: "TOP_LEFT 24, 29", size: "280 × 16",
+       note: "Where it runs, as the PC words it (“local”, “lab (ssh)”, “web (podman)”). LV_LABEL_LONG_DOT. Hidden when the PC sends none." });
   el({ s: "main", id: "row_state" + tag, widget: "label", parent: "row", spec: first, text: j.st, font: 14, color: j.c,
-       d: { r: 764, y: ry + 16 }, place: "RIGHT_MID 0, 0", size: "auto", note: "State and how long, in the state colour." });
+       d: { r: 764, y: ry + 16 }, place: "RIGHT_MID 0, 0", size: "auto", note: "State and how long, in the state colour. The board works out how long from the job's since and its own clock, again every 10 s: “<1m”, “3m”, “2h”, “4d”; done: “just now”, “5m ago”. The state word alone while the clock isn't set." });
 });
 el({ s: "main", id: "jb_more", widget: "label", parent: "card_jobs", text: "+1 more in Talpy Den", font: 14, color: "muted",
      d: { x: 356, y: 428 }, place: "BOTTOM_LEFT 24, 0", size: "auto",
      note: "Jobs that didn't get a row, lined up with the job names. Hidden while every job fits. The tiles count these too." });
 
 /* ---------- hourly forecast: tap the weather card ---------- */
-["clock", "date", "pc_pill", "pc_text"].forEach(id => { rows.find(r => r.id === id).hdr = true; });
+["clock", "date", "pc_pill", "pc_text", "pull_zone", "pull_hint"].forEach(id => { rows.find(r => r.id === id).hdr = true; });
 const hours = [
   { h: "Now",   code: 2,  day: true,  t: 12, rain: 10 },
   { h: "15:00", code: 3,  day: true,  t: 12, rain: 20 },
@@ -406,34 +447,71 @@ hours.forEach((h, i) => {
        place: "TOP_MID 0, 242", size: "56 × 6", color: "rain", note: "lv_bar, range 0–100, no animation. MAIN: line colour. INDICATOR: rain colour. Both radius 3." });
 });
 el({ s: "hourly", group: "Temperature line" });
-el({ s: "hourly", id: "hr_chart", widget: "chart", parent: "card_hourly", values: hours.map(h => h.t), d: { x: 81, y: 316, w: 637, h: 56 },
-     place: "TOP_LEFT 45, 208", size: "637 × 56", color: "text",
-     note: "lv_chart, type LINE, 8 points, one series in text colour. Create it after the columns so it draws over them. No background, border, padding or division lines. Line width 3; INDICATOR width and height 8 for the dots. Y range: coldest − 2 to warmest + 2, so no dot touches the edge. At width 637 the points fall 91 px apart, on the column centres." });
+el({ s: "hourly", id: "hr_line", widget: "chart", parent: "card_hourly", values: hours.map(h => h.t), d: { x: 81, y: 316, w: 637, h: 56 },
+     place: "TOP_LEFT 45, 208 (the curve's box)", size: "637 × 56", color: "text",
+     note: "lv_line, straight from hour to hour (8 points). A smooth curve was tried and looked worse: LVGL here keeps line points in whole pixels (LV_USE_FLOAT 0), so it came out stepped. Line width 3, rounded, text colour. A dot (hr_dot, 8 × 8 circle) on each hour, on the column centres 91 px apart. Y: coldest − 2 at the bottom, warmest + 2 at the top. Created after the columns, so it draws over them. Drawn 4 px inside the line object, so its ends aren't cut." });
+
+/* ---------- pull-down panel: swipe down from the header ---------- */
+el({ s: "shade", group: "Pull-down panel, on lv_layer_top() (drawn over the normal screen)" });
+el({ s: "shade", id: "shade_scrim", widget: "obj", parent: "lv_layer_top()", d: { x: 0, y: 0, w: 800, h: 480 },
+     style: { background: "rgba(0,0,0,0.5)" }, place: "TOP_LEFT 0, 0", size: "800 × 480", color: "bg",
+     note: "Black, bg_opa LV_OPA_50. Shown as the pull starts (the finger is moving, so its one slow full-screen redraw goes unnoticed) and hidden once the panel is back up; never faded, as a change over the whole screen is costly on this board. Clickable: a touch on it closes the panel as the finger goes down (LV_EVENT_PRESSED)." });
+el({ s: "shade", id: "shade", widget: "obj", parent: "lv_layer_top()", d: { x: 0, y: 0, w: 800, h: 136 },
+     style: { background: col("tile"), borderRadius: "0 0 20px 20px", boxShadow: "inset 0 -1px 0 " + col("line") }, place: "TOP_LEFT 0, -24 (up: 0, -160)", size: "800 × 160", color: "tile",
+     note: "Tile colour (lighter than the cards it covers), border 1 px line colour, radius 20: its top 24 px stay above the screen, so only the bottom corners show round. Padding 40 at the sides, 48 on top, 28 below. It follows the finger; let go, and it glides the rest of the way (up to 180 ms, less for less, lv_anim_path_ease_out). Pushed up a third of the way it closes, as it does after 10 s without a touch. Only its strip of the screen is drawn again while it moves." });
+el({ s: "shade", id: "br_title", widget: "label", parent: "shade", text: "BRIGHTNESS", font: 14, color: "muted", ls: 1,
+     d: { x: 40, y: 24 }, place: "TOP_LEFT 0, 0", size: "auto", note: "card_brightness_create(shade): the card's parts, as they were." });
+el({ s: "shade", id: "br_value", widget: "label", parent: "shade", text: "72%", font: 14, color: "text",
+     d: { r: 604, y: 24 }, place: "TOP_RIGHT 0, 0", size: "auto", note: "Updated in the slider's event. Right edge of the brightness box (564 wide, the panel's left part)." });
+el({ s: "shade", id: "br_slider", widget: "slider", parent: "shade", d: { x: 40, y: 62, w: 564, h: 10 }, value: 72, track: "bg",
+     place: "TOP_LEFT 0, 38", size: "lv_pct(100) × 10", color: "bg",
+     note: "In the panel's left 564 px, so it ends 16 px before Stay on. Its box reaches 14 px further on each side (padding 14): the knob at 0% or 100% sticks out of the slider by half its 28 px, and LVGL draws a box's children only where the box itself is (overflow visible doesn't help there), so half the knob was cut. MAIN: screen colour, a dark groove on the panel. INDICATOR: text. KNOB: white, pad 9 (28 px knob). ext_click_area 20. Range 0–100 with your curve." });
+el({ s: "shade", id: "shade_stay", widget: "button", parent: "shade", d: { x: 636, y: 44, w: 140, h: 44 },
+     style: { background: col("bg"), borderRadius: "12px" }, place: "RIGHT_MID 16, 0", size: "140 × 44", color: "bg",
+     note: "16 px into the panel's right padding: the knob at 100% reaches 14 px past the slider's end, and this leaves a gap after it; 24 px from the screen's edge. A toggle (LV_OBJ_FLAG_CHECKABLE), radius 12, no shadow. Off: screen colour, muted text. On: text colour, screen-colour text. On, the screen stays lit; off, it goes dark after 2 min without a touch while no job is working or waiting (a touch, an alert, a job starting or the PC coming back lights it, at the brightness it had; that touch only wakes it). Either way it goes dark while the PC is away (60 s without a message, or {\"type\":\"power\",\"state\":\"sleep\"}), and the board naps then (100 ms of light sleep at a time, waking on serial data)." });
+el({ s: "shade", id: "shade_stay_text", widget: "label", parent: "shade_stay", text: "{EYE} Stay on", font: 14, color: "muted",
+     d: { cx: 706, cy: 66 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_EYE_OPEN \" Stay on\"; its colour from the button's state." });
+el({ s: "shade", id: "shade_handle", widget: "obj", parent: "shade", d: { x: 380, y: 120, w: 40, h: 4 },
+     style: { background: col("dim"), borderRadius: "2px" }, place: "BOTTOM_MID 0, 16", size: "40 × 4", color: "dim",
+     note: "Radius LV_RADIUS_CIRCLE, not clickable: says it goes back up." });
 
 /* ---------- alert screen (step 9) ---------- */
-el({ s: "alert", group: "Alert, on lv_layer_top()" });
-el({ s: "alert", id: "scrim", widget: "obj", parent: "lv_layer_top()", d: { x: 0, y: 0, w: 800, h: 480 },
-     style: { background: "rgba(0,0,0,0.6)" }, place: "TOP_LEFT 0, 0", size: "800 × 480", color: "bg",
-     note: "Black, bg_opa LV_OPA_60, radius 0, border 0. Clickable, so taps don't reach the screen behind." });
-el({ s: "alert", id: "alert_box", widget: "obj", parent: "scrim", d: { x: 120, y: 110, w: 560, h: 260 },
+el({ s: "alert", group: "Alert: a job waiting for you, on a screen of its own" });
+el({ s: "alert", id: "alert_scr", widget: "screen", parent: "(none)", d: { x: 0, y: 0, w: 800, h: 480 },
+     style: { background: col("bg") }, place: "lv_obj_create(NULL)", size: "800 × 480", color: "bg",
+     note: "A screen of its own, loaded with lv_screen_load() while the alert shows; the screen it took the place of is loaded again after. Nothing of the main screen is drawn meanwhile: on lv_layer_top() over a see-through dim, its animations (the weather icon, the waiting tile) kept being drawn under it and showed through, flickering." });
+el({ s: "alert", id: "alert_box", widget: "obj", parent: "alert_scr", d: { x: 120, y: 110, w: 560, h: 260 },
      style: { background: col("card"), borderRadius: "20px", boxShadow: "inset 6px 0 0 " + col("wait") },
      place: "CENTER 0, 0", size: "560 × 260", color: "card",
-     note: "Radius 20, padding 28. Border 6 px waiting colour, border_side LEFT only. Inner area 504 × 204." });
+     note: "Radius 20, padding 28. Border 6 px in the kind's colour (waiting: amber; done: green), border_side LEFT only. Inner area 504 × 204. One box for both kinds: only its colours, sign and texts change." });
 el({ s: "alert", id: "al_badge", widget: "obj", parent: "alert_box", d: { x: 148, y: 138, w: 40, h: 40 }, round: true,
-     style: { background: col("waitbg") }, place: "TOP_LEFT 0, 0", size: "40 × 40", color: "waitbg", note: "Circle." });
-el({ s: "alert", id: "al_bell", widget: "label", parent: "al_badge", text: "{BELL}", font: 24, color: "wait",
-     d: { cx: 168, cy: 158 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_BELL" });
+     style: { background: col("waitbg") }, place: "TOP_LEFT 0, 0", size: "40 × 40", color: "waitbg", note: "Circle: the alert badge colour (waiting) or the PC pill's (done)." });
+el({ s: "alert", id: "al_icon", widget: "label", parent: "al_badge", text: "{BELL}", font: 24, color: "wait",
+     d: { cx: 168, cy: 158 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_BELL (waiting) or LV_SYMBOL_OK (done), in the kind's colour." });
 el({ s: "alert", id: "al_kicker", widget: "label", parent: "alert_box", text: "WAITING FOR YOU", font: 14, color: "wait", ls: 1,
-     d: { x: 200, y: 150 }, place: "TOP_LEFT 52, 12", size: "auto", note: "text_letter_space 1" });
+     d: { x: 200, y: 150 }, place: "TOP_LEFT 52, 12", size: "auto", note: "text_letter_space 1. “WAITING FOR YOU” or “FINISHED” in the kind's colour, unless the PC sends its own (kicker)." });
 el({ s: "alert", id: "al_name", widget: "label", parent: "alert_box", text: "desk-display-gadget", font: 40, color: "text", cut: true,
      d: { x: 148, y: 198, w: 504 }, place: "TOP_LEFT 0, 60", size: "504 × auto", note: "LV_LABEL_LONG_DOT" });
-el({ s: "alert", id: "al_detail", widget: "label", parent: "alert_box", text: "Claude asked a question • 14:52", font: 24, color: "muted",
-     d: { x: 148, y: 250 }, place: "TOP_LEFT 0, 112", size: "auto" });
+el({ s: "alert", id: "al_detail", widget: "label", parent: "alert_box", text: "local • 14:52", font: 24, color: "muted",
+     d: { x: 148, y: 250 }, place: "TOP_LEFT 0, 112", size: "auto", note: "Where the job runs and since when (its machine and since, from the jobs message). LV_LABEL_LONG_DOT, 504 wide." });
 el({ s: "alert", id: "al_ok", widget: "button", parent: "alert_box", d: { x: 512, y: 290, w: 140, h: 52 },
      style: { background: col("wait"), borderRadius: "12px" }, place: "BOTTOM_RIGHT 0, 0", size: "140 × 52", color: "wait",
-     note: "Tap: delete the scrim (its children go with it)." });
+     note: "In the kind's colour. Tap: back to the screen it took the place of. A waiting alert stays till then; a finished one also goes by itself after 15 s, and doesn't take a waiting one's place. It also goes once its job stops waiting (the next jobs message says so); a job that keeps waiting doesn't bring it back." });
 el({ s: "alert", id: "al_ok_text", widget: "label", parent: "al_ok", text: "OK", font: 24, color: "bg",
      d: { cx: 582, cy: 316 }, place: "CENTER 0, 0", size: "auto" });
+
+// A job finished: the same box, its colours and texts changed.
+rows.filter(r => r.s === "alert").forEach(r => {
+  const c = Object.assign({}, r, { s: "done" });
+  if (r.group) c.group = "Alert: a job finished (the same box: its colours, sign and texts change)";
+  if (c.color === "wait") c.color = "done";
+  if (c.color === "waitbg") c.color = "pcbg";
+  if (c.text === "{BELL}") c.text = "{OK}";
+  if (c.text === "WAITING FOR YOU") c.text = "FINISHED";
+  if (c.text === "local • 14:52") c.text = "local • 14:58";
+  if (c.style) c.style = JSON.parse(JSON.stringify(c.style).split(col("waitbg")).join(col("pcbg")).split(col("wait")).join(col("done")));
+  rows.push(c);
+});
 
 /* ---------- draw ---------- */
 const stage = document.getElementById("stage");
@@ -443,7 +521,7 @@ let mode = "main";
 function draw() {
   stage.innerHTML = "";
   // normal: the main screen; alert: main + alert on top; hourly: the header + the hourly card
-  const list = rows.filter(r => r.id && (r.s === mode || (r.s === "main" && (mode === "alert" || (mode === "hourly" && r.hdr)))));
+  const list = rows.filter(r => r.id && (r.s === mode || (r.s === "main" && (mode === "shade" || (mode === "hourly" && r.hdr)))));
   const made = {};
   list.forEach(r => {
     const n = document.createElement("div");
@@ -467,13 +545,13 @@ function draw() {
       n.style.left = d.x + "px"; n.style.top = (d.y - 9) + "px"; n.style.width = d.w + "px"; n.style.height = "28px";
       const v = r.value / 100;
       n.innerHTML =
-        '<div style="position:absolute;left:0;right:0;top:9px;height:10px;border-radius:5px;background:' + col("tile") + '"></div>' +
+        '<div style="position:absolute;left:0;right:0;top:9px;height:10px;border-radius:5px;background:' + col(r.track || "tile") + '"></div>' +
         '<div style="position:absolute;left:0;top:9px;height:10px;width:' + (v * 100) + '%;border-radius:5px;background:' + col("text") + '"></div>' +
         '<div style="position:absolute;top:0;left:calc(' + (v * 100) + '% - 14px);width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>';
     } else if (r.widget === "bar") {
       n.style.left = d.x + "px"; n.style.top = d.y + "px"; n.style.width = d.w + "px"; n.style.height = d.h + "px";
-      n.style.borderRadius = "3px"; n.style.background = col("line");
-      n.innerHTML = '<div style="height:100%;border-radius:3px;width:' + r.value + '%;background:' + col("rain") + '"></div>';
+      n.style.borderRadius = "3px"; n.style.background = col(r.track || "line");
+      n.innerHTML = '<div style="height:100%;border-radius:3px;width:' + r.value + '%;background:' + col(r.fill || "rain") + '"></div>';
     } else if (r.widget === "chart") {
       n.style.left = d.x + "px"; n.style.top = d.y + "px"; n.style.width = d.w + "px"; n.style.height = d.h + "px";
       const v = r.values, lo = Math.min(...v) - 2, hi = Math.max(...v) + 2, step = d.w / (v.length - 1);
@@ -486,6 +564,7 @@ function draw() {
       if (r.card) { n.style.background = col("card"); n.style.borderRadius = "16px"; }
       if (r.round) n.style.borderRadius = "50%";
       if (r.style) Object.assign(n.style, r.style);
+      if (r.cls) n.classList.add(r.cls);
       if (r.icon) {
         const k = r.icon.scale;
         n.style.overflow = "hidden";
@@ -504,7 +583,9 @@ function draw() {
     }
     // Like the board: the weather card opens the hourly card, Back closes it.
     const go = mode === "main" && (r.id === "card_wx" || r.parent === "card_wx") ? "hourly"
-             : mode === "hourly" && (r.id === "hr_back" || r.parent === "hr_back") ? "main" : null;
+             : mode === "main" && (r.id === "pull_zone" || r.parent === "pull_zone") ? "shade"
+             : mode === "hourly" && (r.id === "hr_back" || r.parent === "hr_back") ? "main"
+             : mode === "shade" && r.id === "shade_scrim" ? "main" : null;
     if (go) { n.classList.add("tap"); n.addEventListener("click", () => setMode(go)); }
     n.addEventListener("mouseenter", () => pick(r.id, true));
     n.addEventListener("mouseleave", () => pick(r.id, false));
@@ -557,15 +638,23 @@ function table() {
 const MODES = {
   main: {
     btn: "btn-main", hash: "normal", title: "Every element: normal screen",
-    caption: "Tap the weather card to open the hourly forecast, as on the board. Hover a row in the table below to find its box on the screen. Example data: 5 jobs (2 working, 1 waiting, 2 done), so the fifth is counted in “+1 more”."
+    caption: "Tap the weather card to open the hourly forecast, and the header to pull down the brightness, as on the board (where it's a swipe down). Hover a row in the table below to find its box on the screen. Example data: 5 jobs (2 working, 1 waiting, 2 done), so the fifth is counted in “+1 more”."
   },
   hourly: {
     btn: "btn-hourly", hash: "hourly", title: "Every element: hourly forecast (the header stays from the normal screen)",
     caption: "Tap Back to return. Example data: rain this afternoon, clearing after dark. On the board each column comes from Open-Meteo's hourly <code>temperature_2m</code>, <code>weather_code</code>, <code>is_day</code> and <code>precipitation_probability</code>."
   },
+  shade: {
+    btn: "btn-shade", hash: "shade", title: "Every element: pull-down panel (drawn over the normal screen)",
+    caption: "Pull down from the header and the panel comes with your finger, as on a phone. A tap under it, pushing it up, or 10 s without a touch closes it (tap the dimmed screen here). Stay on keeps the screen lit; without it the screen goes dark after 2 min without a touch, once no job is working or waiting."
+  },
+  done: {
+    btn: "btn-done", hash: "done", title: "Every element: alert, a job finished (the same box, in green)",
+    caption: "A job finished: the same box as for a job waiting, green, with a check. It goes by itself after 15 s (or with OK), and never takes the place of a waiting one."
+  },
   alert: {
-    btn: "btn-alert", hash: "alert", title: "Every element: alert (drawn over the normal screen)",
-    caption: "The alert covers whichever screen is showing. Hover a row in the table below to find its box on the screen."
+    btn: "btn-alert", hash: "alert", title: "Every element: alert, a job waiting for you (a screen of its own)",
+    caption: "A job started waiting for you: a screen of its own in place of the one showing, till OK. No message of its own: the board compares each jobs message with the one before (job_watch.c), so a job that keeps waiting doesn't bring it back, and it goes once the job stops waiting."
   }
 };
 
@@ -590,7 +679,7 @@ Object.entries(MODES).forEach(([k, v]) => document.getElementById(v.btn).addEven
 document.getElementById("show-boxes").addEventListener("change", e => stage.classList.toggle("boxes", e.target.checked));
 const modeFromHash = () => {
   const h = location.hash.replace(/^#(png-)?/, "");
-  return h === "alert" ? "alert" : h === "hourly" ? "hourly" : "main";
+  return h === "alert" ? "alert" : h === "done" ? "done" : h === "hourly" ? "hourly" : h === "shade" ? "shade" : "main";
 };
 window.addEventListener("hashchange", () => setMode(modeFromHash()));
 new ResizeObserver(fit).observe(wrap);

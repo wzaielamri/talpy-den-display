@@ -44,6 +44,7 @@ lv_obj_t *make_blob(lv_obj_t *parent, int x, int y, int w, int h, int radius, ui
     lv_obj_set_style_bg_color(blob, lv_color_hex(color), 0);
     lv_obj_set_style_radius(blob, radius, 0);
     lv_obj_set_style_border_width(blob, 0, 0);
-    lv_obj_remove_flag(blob, LV_OBJ_FLAG_SCROLLABLE);
+    // Not clickable: a tap on a shape goes to what's under it (the weather card that opens the hourly view).
+    lv_obj_remove_flag(blob, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     return blob;
 }

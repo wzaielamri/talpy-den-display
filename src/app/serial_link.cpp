@@ -5,6 +5,11 @@
 #include "app/clock.h"
 #include "ui/card_weather.h"
 #include "ui/card_jobs.h"
+#include "ui/card_usage.h"
+#include "ui/card_hourly.h"
+#include "app/job_watch.h"
+#include "ui/header_pc.h"
+#include "app/screen_power.h"
 
 static void handle_time(JsonDocument &doc) {
     if (doc["epoch"].is<long long>()) {
@@ -43,8 +48,13 @@ static bool parse_state(const char *s, job_state_t *out) {
     return false;
 }
 
-// {"type":"jobs","updated":"14:52:05","rows":[{"name":"...","state":"waiting","detail":"3m"},...]}
+// {"type":"jobs","updated":"14:52:05","rows":[{"name":"...","state":"waiting","since":1794145062},...]}
 // rows holds every job, not only 4: the card counts them all and picks what fits.
+// since: when the job got into its state, Unix seconds as a whole number (Talpy Den's ms / 1000).
+// machine (optional): where it runs, shown small under the name, e.g. "local" or "lab (ssh)".
+// id: stable while the job is listed (jobs.json's "id"): the alerts come from a job's state changing
+// from one jobs message to the next (job_watch.c), so no separate notify message is needed.
+// The board counts "3m" from it with its own clock, so the PC only has to send when something changes.
 // An empty list [] means no jobs.
 static void handle_jobs(JsonDocument &doc) {
     if (!doc["rows"].is<JsonArray>()) { Serial.println("bad jobs: needs rows"); return; }
@@ -58,7 +68,9 @@ static void handle_jobs(JsonDocument &doc) {
             Serial.println("bad job: needs a name and state working, waiting or done");
             continue; // skip this one, keep the others
         }
-        jobs.push_back({name, state, row["detail"].as<const char *>()});
+        long long since = row["since"] | 0LL; // missing or not a whole number: 0, not known
+        jobs.push_back({name, state, (time_t)(since > 0 ? since : 0), row["machine"].as<const char *>(),
+                        row["id"].as<const char *>()});
     }
 
     job_update_t u = {
@@ -67,30 +79,124 @@ static void handle_jobs(JsonDocument &doc) {
     };
     card_jobs_set(&u);
     Serial.printf("card_jobs_set(%d jobs)\n", u.count);
+
+    // A job working or waiting for you: something to watch, so the screen stays lit.
+    bool busy = false;
+    for (const job_info_t &j : jobs) busy |= j.state == JOB_WORKING || j.state == JOB_WAITING;
+    screen_power_set_busy(busy);
+
+    // A job that started waiting for you or finished: the alert.
+    job_watch_update(jobs.data(), (int)jobs.size());
+}
+
+// A percentage as a whole number: 40, and also 40.0 or 39.6 as Talpy Den's jobs.json has them; -1 if missing.
+static int percent(JsonVariantConst v) {
+    return v.is<double>() ? (int)lround(v.as<double>()) : -1;
+}
+
+// Unix seconds as a whole number; 0 (not known) if missing.
+static time_t seconds(JsonVariantConst v) {
+    long long s = v | 0LL;
+    return (time_t)(s > 0 ? s : 0);
+}
+
+// {"type":"usage","accounts":[{"name":"work","plan":"Team","five_hour":42,"seven_day":84,
+//                              "five_hour_resets":1794158400,"seven_day_resets":1794304800},...]}
+// Each account's plan usage: the % of its 5-hour window and of its week, and when each starts again
+// (jobs.json's "accounts": their windows "five_hour" and "seven_day", "pct" and "resetsAt" / 1000).
+// One missing shows "--" (a reset: nothing). The card shows the first USAGE_ROWS.
+static void handle_usage(JsonDocument &doc) {
+    if (!doc["accounts"].is<JsonArray>()) { Serial.println("bad usage: needs accounts"); return; }
+    std::vector<usage_account_t> accounts;
+    for (JsonObject a : doc["accounts"].as<JsonArray>()) {
+        const char *name = a["name"].as<const char *>();
+        if (!name || !name[0]) {
+            Serial.println("bad account: needs a name");
+            continue;
+        }
+        accounts.push_back({name, a["plan"].as<const char *>(), percent(a["five_hour"]), percent(a["seven_day"]),
+                            seconds(a["five_hour_resets"]), seconds(a["seven_day_resets"])});
+    }
+    card_usage_set(accounts.data(), (int)accounts.size());
+    Serial.printf("card_usage_set(%d accounts)\n", (int)accounts.size());
+}
+
+// {"type":"hourly","updated":"14:45","summary":"Rain likely from 16:00 to 18:00",
+//  "hours":[{"at":1794150000,"temp":12,"code":2,"day":true,"rain":10},...]}
+// The next hours from now (Open-Meteo hourly: temperature_2m, weather_code, is_day,
+// precipitation_probability); at: the hour's start in Unix seconds. 12.4 is fine for temp (rounded).
+static void handle_hourly(JsonDocument &doc) {
+    if (!doc["hours"].is<JsonArray>()) { Serial.println("bad hourly: needs hours"); return; }
+    std::vector<hour_t> hours;
+    for (JsonObject h : doc["hours"].as<JsonArray>()) {
+        if (hours.size() == HOURLY_COLS) break;
+        if (!h["temp"].is<double>() || !h["code"].is<int>()) {
+            Serial.println("bad hour: needs temp and code");
+            continue;
+        }
+        hours.push_back({seconds(h["at"]), (int)lround(h["temp"].as<double>()), h["code"].as<int>(),
+                         h["day"] | true, percent(h["rain"])});
+    }
+    hourly_update_t u = {hours.data(), (int)hours.size(), doc["summary"].as<const char *>(),
+                         doc["updated"].as<const char *>()};
+    card_hourly_set(&u);
+    Serial.printf("card_hourly_set(%d hours)\n", u.count);
+}
+
+// ---------- is the PC there? ----------
+
+// No whole message for this long: the PC is away (suspended, shut down, unplugged, or sync.py not
+// running): "PC offline", and the board goes dark and naps. sync.py sends something at least every
+// 10 s (a {"type":"ping"} does) to stay there; 60 s leaves room for a slow check or a restart.
+#define PC_AWAY_MS 60000
+
+static bool pc_online = true; // at start: the PC is assumed there (it powers the board) till it's quiet
+static uint32_t last_seen;    // millis() of the last whole message
+
+static void set_pc_online(bool online) {
+    if (online == pc_online) return;
+    pc_online = online;
+    header_pc_set_online(online);
+    screen_power_pc_present(online);
+    Serial.printf("PC %s\n", online ? "back" : "away");
+}
+
+// {"type":"power","state":"sleep"} when the PC is about to suspend or shut down: dark and napping at
+// once, not PC_AWAY_MS later. Its next message (any) brings the board back.
+static void handle_power(JsonDocument &doc) {
+    const char *state = doc["state"] | "";
+    if (strcmp(state, "sleep") == 0) set_pc_online(false);
+    else if (strcmp(state, "wake") != 0) Serial.println("bad power: state sleep or wake");
 }
 
 static void handle_line(const char *line) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, line);
     if (err) {
-        Serial.printf("bad line: %s\n", err.c_str());
+        Serial.printf("bad line: %s\n", err.c_str()); // (one cut by the board waking up, too)
         return;
     }
     const char *type = doc["type"] | "";
-    if      (strcmp(type, "time") == 0)    handle_time(doc);
+    last_seen = millis();
+    if (strcmp(type, "power") != 0) set_pc_online(true); // a whole message: the PC is there
+    if      (strcmp(type, "power") == 0)   handle_power(doc);
+    else if (strcmp(type, "ping") == 0)    {} // only says the PC is there
+    else if (strcmp(type, "time") == 0)    handle_time(doc);
     else if (strcmp(type, "weather") == 0) handle_weather(doc);
     else if (strcmp(type, "jobs") == 0)    handle_jobs(doc);
-    //else if (strcmp(type, "notify") == 0)  handle_notify(doc);
+    else if (strcmp(type, "usage") == 0)   handle_usage(doc);
+    else if (strcmp(type, "hourly") == 0)  handle_hourly(doc);
     else Serial.printf("unknown type: \"%s\"\n", type);
 }
 
 // A jobs message is about 60 characters per job, so 4096 holds 60+ jobs.
-#define LINE_MAX 4096
+#define SERIAL_LINE_MAX 4096 // (not LINE_MAX: <limits.h> has one of that name)
 
 void serial_poll(void) {
-    static char line[LINE_MAX];
+    static char line[SERIAL_LINE_MAX];
     static size_t len = 0;
     static bool too_long = false; // this line didn't fit: drop all of it, don't parse half
+    if (pc_online && millis() - last_seen > PC_AWAY_MS) set_pc_online(false);
     while (Serial.available() > 0) {
         char c = Serial.read();
         if (c == '\n' || c == '\r') {

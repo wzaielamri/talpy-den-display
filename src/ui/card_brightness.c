@@ -28,14 +28,15 @@ static void br_slider_event(lv_event_t *e) {
 
 void card_brightness_create(lv_obj_t *parent){
     br_slider = lv_slider_create(parent);
-    lv_obj_set_width(br_slider, 240);
+    lv_obj_set_width(br_slider, lv_pct(100)); // the parent's whole width: the pull-down panel's 720
     lv_obj_set_height(br_slider, 10);
     lv_obj_set_x(br_slider, 0);
     lv_obj_set_y(br_slider, 38);
     lv_obj_set_align(br_slider, LV_ALIGN_TOP_LEFT);
     lv_obj_add_flag(br_slider, LV_OBJ_FLAG_SCROLL_ON_FOCUS); /// Flags
     lv_obj_remove_flag(br_slider, LV_OBJ_FLAG_SCROLLABLE);   /// Flags
-    lv_obj_set_style_bg_color(br_slider, lv_color_hex(COLOR_TILE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    // track in the screen colour: a dark groove on the pull-down panel's tile colour
+    lv_obj_set_style_bg_color(br_slider, lv_color_hex(COLOR_BG), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(br_slider, lv_color_hex(COLOR_TEXT), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(br_slider, lv_color_white(), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(br_slider, lv_color_hex(COLOR_WAIT), LV_PART_KNOB | LV_STATE_PRESSED);

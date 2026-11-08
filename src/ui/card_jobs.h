@@ -4,6 +4,7 @@ extern "C" {
 #endif
 
 #include "lvgl.h"
+#include <time.h>
 
 // Rows on the screen. With more jobs than this, a "+N more in Talpy Den" line shows under them.
 #define JOBS_ROWS 4
@@ -16,7 +17,11 @@ typedef enum { JOB_WORKING, JOB_WAITING, JOB_DONE } job_state_t;
 typedef struct {
     const char *name;
     job_state_t state;
-    const char *detail;   // "3m", "5m ago"; NULL or "" shows the state word alone
+    time_t since;         // when it got into this state, Unix seconds (UTC); 0: not known
+    const char *machine;  // where it runs, a small line under the name ("local", "lab (ssh)");
+                          // NULL or "": the name alone, on one line
+    const char *id;       // stable while the job is listed (jobs.json's "id"): job_watch.c tells a job's
+                          // state change by it; NULL or "": name and machine stand in
 } job_info_t;
 
 // Everything the jobs card shows, in one message.
@@ -28,11 +33,18 @@ typedef struct {
 
 void card_jobs_create(lv_obj_t *parent);
 
+// Hold the waiting tile's breathing border still (true; full while a job waits) or let it breathe
+// again (false): the pull-down panel holds it still while it's out, so nothing changes under its
+// dimming (a change there showed through undimmed).
+void card_jobs_freeze(bool on);
+
 // Fill the whole card from the full job list:
 // - the three tiles count every job;
 // - the rows show waiting jobs first (they need you), then working, then done,
 //   keeping the PC's order within each state;
-// - jobs that don't fit are counted in "+N more in Talpy Den" under the rows.
+// - jobs that don't fit are counted in "+N more in Talpy Den" under the rows;
+// - each row says how long, from since and the board's clock, and keeps counting by itself:
+//   "waiting • 3m", "working • 2h", "done • 5m ago" (only the state word while either isn't known).
 // The card copies the texts, so u and its strings may be freed after the call.
 // Call from the LVGL loop (loop()/serial handler), never from another task.
 void card_jobs_set(const job_update_t *u);

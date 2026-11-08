@@ -70,6 +70,10 @@ void card_weather_create(lv_obj_t *parent){
     wx_note = make_label(parent, &lv_font_montserrat_14, COLOR_DIM, "");
     lv_obj_align(wx_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
+    // Says the card can be tapped: it opens the hourly forecast (screen_main.c).
+    lv_obj_t *wx_more = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "Hourly " LV_SYMBOL_RIGHT);
+    lv_obj_align(wx_more, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+
     // Top-right corner, above the condition text. Its partly-cloudy icon puts the sun and
     // cloud exactly where the design page has them.
     weather_icon_create(parent, 140, 0);

@@ -1,0 +1,19 @@
+#pragma once
+#include "ui/card_jobs.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// The alerts come from the jobs themselves: each jobs message is compared with the one before, job by
+// job (by id), and a change alerts.
+// - A job starting to wait for you (also a new one that waits at once, or one that already waits in
+//   the first message after the board starts): the waiting alert, till OK.
+// - A job finishing (to done from working or waiting): the finished alert, which goes by itself.
+// Nothing changed, nothing new: a job that keeps waiting doesn't bring back the alert you closed.
+// A job that stops waiting (you answered it) or goes takes its waiting alert away.
+void job_watch_update(const job_info_t *jobs, int n);
+
+#ifdef __cplusplus
+} /*extern "C"*/
+#endif
