@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """Feed the desk display over USB serial: Talpy Den's jobs and plan usage, the time, the weather.
 
-    python3 host/sync.py --lat 0 --lon 0            # the board on /dev/ttyUSB0
-    python3 host/sync.py --port /dev/desk-display --lat ... # another port (a udev name, say)
-    python3 host/sync.py --dry-run --lat ...                # print the messages, send nothing
-    python3 host/sync.py --demo                             # send made-up examples once, to try the board
+    python3 host/sync.py                        # feed the board, with ~/.config/desk-display.env's place
+    python3 host/sync.py --lat 0 --lon 0        # another place for this run
+    python3 host/sync.py --port /dev/ttyUSB1    # another port
+    python3 host/sync.py --dry-run              # print the messages, send nothing
+    python3 host/sync.py --demo                 # send made-up examples once, to try the board
+
+Your place stays out of the repository, in ~/.config/desk-display.env (the systemd service reads it too):
+
+    DESK_LAT=0
+    DESK_LON=0
+    DESK_PORT=/dev/ttyUSB0    (optional: by default /dev/desk-display if the udev rule made it, else this)
 
 Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
 - jobs and usage: from $XDG_RUNTIME_DIR/talpy-den/jobs.json, which Talpy Den writes whenever a chat's
@@ -270,9 +277,25 @@ def local_tz():
         return ""
 
 
+def load_config():
+    """DESK_LAT, DESK_LON and DESK_PORT from ~/.config/desk-display.env's KEY=value lines, so a run by
+    hand finds the same place as the service. What's already in the environment wins."""
+    try:
+        lines = (Path.home() / ".config" / "desk-display.env").read_text().splitlines()
+    except OSError:
+        return
+    for line in lines:
+        key, sep, value = line.strip().partition("=")
+        if sep and key.strip().startswith("DESK_"):
+            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
 def main():
+    load_config()
+    port = os.environ.get("DESK_PORT") or ("/dev/desk-display" if os.path.exists("/dev/desk-display")
+                                           else "/dev/ttyUSB0")
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--port", default=os.environ.get("DESK_PORT", "/dev/ttyUSB0"))
+    ap.add_argument("--port", default=port)
     ap.add_argument("--lat", type=float, default=os.environ.get("DESK_LAT"))
     ap.add_argument("--lon", type=float, default=os.environ.get("DESK_LON"))
     ap.add_argument("--dry-run", action="store_true", help="print the messages instead of sending them")
@@ -286,7 +309,7 @@ def main():
         time.sleep(0.5)
         return
     if args.lat is None or args.lon is None:
-        print("no --lat/--lon (or DESK_LAT/DESK_LON): no weather")
+        print("no --lat/--lon (or DESK_LAT/DESK_LON in ~/.config/desk-display.env): no weather")
 
     path = jobs_file()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)  # (to watch it before Talpy Den writes)

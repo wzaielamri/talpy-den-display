@@ -1,25 +1,26 @@
 # sync.py as a systemd user service: it starts with your login, starts again if it stops, and logs to
-# the journal. Your location stays out of the repo, in ~/.config/desk-display.env:
+# the journal. It runs host/sync.py through a link in ~/.local/bin, so the clone can live anywhere.
+# From the clone's folder:
 #
-#   DESK_LAT=0
-#   DESK_LON=0
-#
-#   mkdir -p ~/.config/systemd/user
+#   mkdir -p ~/.local/bin ~/.config/systemd/user
+#   ln -sf "$PWD/host/sync.py" ~/.local/bin/desk-display-sync
+#   printf 'DESK_LAT=0\nDESK_LON=0\n' > ~/.config/desk-display.env    # then put in your own place
 #   cp host/desk-display-sync.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now desk-display-sync
 #   journalctl --user -u desk-display-sync -f            # what it sends and what the board says
 #
+# Without the udev rule (99-desk-display.rules), add DESK_PORT=/dev/ttyUSB0 to that env file.
+# sync.py reads that file too when you run it by hand, so the place is the same either way.
 # Flashing the board needs its port: systemctl --user stop desk-display-sync, pio run -t upload, start.
 [Unit]
-Description=Desk display: Talpy Den jobs, plan usage, time and weather over USB serial
-Documentation=file://%h/repos/talpy-den-display/host/sync.py
+Description=Desk display: coding-agent jobs, plan usage, time and weather over USB serial
 
 [Service]
 Environment=DESK_PORT=/dev/desk-display
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=-%h/.config/desk-display.env
-ExecStart=/usr/bin/python3 %h/repos/talpy-den-display/host/sync.py
+ExecStart=/usr/bin/env python3 %h/.local/bin/desk-display-sync
 Restart=always
 RestartSec=5
 
