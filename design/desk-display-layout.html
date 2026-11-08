@@ -107,7 +107,8 @@ tr[data-id]:hover, tr.pick { background: var(--hi); }
 .note { color: var(--soft); }
 .fonts td:first-child { font-family: var(--f-mono); }
 @media (prefers-reduced-motion: no-preference) { .seg button { transition: background 0.12s; } }
-/* picture export: #png-normal or #png-alert shows the screen alone at 800×480 */
+.el.tap { cursor: pointer; }
+/* picture export: #png-normal, #png-hourly or #png-alert shows the screen alone at 800×480 */
 body.png { padding: 0; background: #0e1116; }
 body.png main { display: block; max-width: none; }
 body.png main > :not(section:first-of-type), body.png .bar, body.png .caption { display: none; }
@@ -119,19 +120,20 @@ body.png .wrap { width: 800px; border-radius: 0; }
 <main>
   <header>
     <h1>Desk Display Layout</h1>
-    <p class="lede">The 800 × 480 CrowPanel screen for your clock, weather and Claude jobs, drawn with LVGL's own Montserrat sizes so text takes the room it will take on the board. Build the normal screen in step 5; the alert is for step 9.</p>
+    <p class="lede">The 800 × 480 CrowPanel screen for your clock, weather and Claude jobs, drawn with LVGL's own Montserrat sizes so text takes the room it will take on the board. Build the normal screen in step 5. Tapping the weather card opens the hourly forecast, which gets real data in step 8. The alert is for step 9.</p>
   </header>
 
   <section aria-label="Screen preview">
     <div class="bar">
       <div class="seg" role="group" aria-label="Screen">
         <button type="button" id="btn-main" aria-pressed="true">Normal</button>
+        <button type="button" id="btn-hourly" aria-pressed="false">Hourly (tap weather)</button>
         <button type="button" id="btn-alert" aria-pressed="false">Alert (step 9)</button>
       </div>
       <label class="check" for="show-boxes"><input type="checkbox" id="show-boxes"> Show every box</label>
     </div>
     <div class="bezel"><div class="wrap" id="wrap"><div class="stage" id="stage"></div></div></div>
-    <p class="caption">Hover a row in the table below to find its box on the screen. Example data: 2 jobs working, 1 waiting, 1 done.</p>
+    <p class="caption" id="caption"></p>
   </section>
 
   <section class="grid2">
@@ -145,8 +147,8 @@ body.png .wrap { width: 800px; border-radius: 0; }
       <table class="fonts" style="min-width:0">
         <thead><tr><th>Font</th><th>Line height</th><th>Used for</th></tr></thead>
         <tbody>
-          <tr><td>montserrat_14</td><td class="num">16 px</td><td>captions, section titles (on by default)</td></tr>
-          <tr><td>montserrat_24</td><td class="num">27 px</td><td>date, job names, weather text</td></tr>
+          <tr><td>montserrat_14</td><td class="num">16 px</td><td>captions, section titles, hours, rain chance (on by default)</td></tr>
+          <tr><td>montserrat_24</td><td class="num">27 px</td><td>date, job names, weather text, hourly temperatures</td></tr>
           <tr><td>montserrat_40</td><td class="num">44 px</td><td>job counts, alert job name</td></tr>
           <tr><td>montserrat_48</td><td class="num">52 px</td><td>clock, temperature</td></tr>
         </tbody>
@@ -162,9 +164,10 @@ body.png .wrap { width: 800px; border-radius: 0; }
         <li>Make one card style with <code>lv_style_t</code>: background, radius 16, padding 20, border 0. Add it to each card and remove <code>LV_OBJ_FLAG_SCROLLABLE</code>.</li>
         <li>Three empty cards in their places. Check the gaps on the board before anything else.</li>
         <li>Header: clock, date, the PC pill.</li>
-        <li>Weather card, the sun and cloud last (later objects draw on top).</li>
+        <li>Weather card: the labels, then <code>weather_icon_create</code> last (later objects draw on top).</li>
         <li>Brightness card with your slider and its curve.</li>
         <li>Jobs card: one row first, then make a function that builds a row and call it four times.</li>
+        <li>Hourly forecast: one more card over the three, hidden until the weather card is tapped. Columns first, the temperature line last.</li>
         <li>Step 9: the alert goes on <code>lv_layer_top()</code>, so it covers the whole screen.</li>
       </ol>
     </div>
@@ -175,6 +178,7 @@ body.png .wrap { width: 800px; border-radius: 0; }
         <li>Inside a card, offsets count from the card's inner edge, after its padding. A card at x 16 with padding 20 starts its children at x 36 on the screen.</li>
         <li><b>auto</b> size means <code>LV_SIZE_CONTENT</code>: the label is as wide as its text.</li>
         <li>Rows 2 to 4 of the job list are row 1 moved down 48 px each.</li>
+        <li>Hourly columns 2 to 8 are column 1 moved right 91 px each. The temperature line's 8 points sit on the column centres.</li>
         <li>On the screen, y grows downward: y 0 is the top edge.</li>
       </ul>
     </div>
@@ -206,7 +210,9 @@ const C = {
   pcbg:   { hex: "13281D", name: "PC pill", use: "PC connected background" },
   waitbg: { hex: "3A2C12", name: "Alert badge", use: "bell circle background" },
   sun:    { hex: "FFCF5A", name: "Sun", use: "weather picture" },
-  cloud:  { hex: "C9D2DD", name: "Cloud", use: "weather picture" }
+  cloud:  { hex: "C9D2DD", name: "Cloud", use: "weather picture" },
+  moon:   { hex: "E6E0C8", name: "Moon", use: "weather picture at night" },
+  rain:   { hex: "7DB8FF", name: "Rain", use: "raindrops, chance of rain" }
 };
 const col = k => "#" + C[k].hex;
 const LH = { 14: 16, 24: 27, 40: 44, 48: 52 };
@@ -217,7 +223,44 @@ const SYM = {
   DOWN: '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5 8 10l4.5-4.5"/></svg>',
   BELL: '<svg class="sym" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5c-2.5 0-4.2 1.9-4.2 4.4v2.6L2.4 11h11.2l-1.4-2.5V5.9C12.2 3.4 10.5 1.5 8 1.5Z"/><path d="M6.2 12.2h3.6a1.8 1.8 0 0 1-3.6 0Z"/></svg>'
 };
-const withSym = t => t.replace(/\{(USB|UP|DOWN|BELL)\}/g, (_, k) => SYM[k]);
+SYM.LEFT = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5"/></svg>';
+SYM.RIGHT = '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>';
+const withSym = t => t.replace(/\{(USB|UP|DOWN|BELL|LEFT|RIGHT)\}/g, (_, k) => SYM[k]);
+
+/* The weather pictures from src/ui/weather_icon.c, at rest, in their 104 × 96 box. */
+const CLOUD = (x, y, c) => [
+  { x: x, y: y + 26, w: 88, h: 34, c }, { x: x + 12, y: y + 10, w: 40, h: 40, c }, { x: x + 40, y: y, w: 48, h: 48, c }
+];
+const MOON = (x, y, d, cx, cy, cd, bg) => [{ x, y, w: d, h: d, c: "moon" }, { x: cx, y: cy, w: cd, h: cd, c: bg }];
+const STAR = (x, y, d) => ({ x, y, w: d, h: d, c: "text" });
+const DROPS = (xs, ys, w, h, c) => xs.map((x, i) => ({ x, y: ys[i], w, h, c }));
+function wxKind(code) {
+  if (code <= 1) return "clear";
+  if (code === 2) return "partly";
+  if (code === 3) return "overcast";
+  if (code === 45 || code === 48) return "fog";
+  if (code >= 51 && code <= 57) return "drizzle";
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+  if (code >= 95 && code <= 99) return "thunder";
+  return "overcast";
+}
+function iconShapes(code, day, bg) {
+  switch (wxKind(code)) {
+    case "clear": return day
+      ? [{ x: 12, y: 8, w: 80, h: 80, c: "sun", o: 0.25 }, { x: 22, y: 18, w: 60, h: 60, c: "sun" }]
+      : [...MOON(24, 20, 56, 42, 10, 46, bg), STAR(8, 12, 6), STAR(90, 10, 4), STAR(92, 70, 5), STAR(14, 82, 4)];
+    case "partly": return [...(day ? [{ x: 36, y: 18, w: 52, h: 52, c: "sun" }]
+      : [...MOON(44, 12, 44, 60, 6, 36, bg), STAR(16, 14, 5), STAR(6, 34, 4)]), ...CLOUD(10, 36, "cloud")];
+    case "overcast": return [...CLOUD(14, 8, "muted"), ...CLOUD(0, 34, "cloud")];
+    case "fog": return [...CLOUD(10, 0, "cloud"),
+      { x: 4, y: 66, w: 80, h: 6, c: "muted" }, { x: 20, y: 77, w: 76, h: 6, c: "muted" }, { x: 8, y: 88, w: 64, h: 6, c: "muted" }];
+    case "drizzle": return [...DROPS([30, 52, 74], [64, 80, 70], 4, 8, "rain"), ...CLOUD(10, 0, "cloud")];
+    case "rain": return [...DROPS([24, 44, 64, 84], [66, 80, 62, 76], 5, 14, "rain"), ...CLOUD(10, 0, "cloud")];
+    case "snow": return [...DROPS([22, 42, 62, 82], [68, 82, 72, 86], 8, 8, "text"), ...CLOUD(10, 0, "cloud")];
+    case "thunder": return [{ bolt: true }, ...DROPS([22, 80], [66, 74], 5, 14, "rain"), ...CLOUD(10, 0, "muted")];
+  }
+}
 
 /* Every element: d = drawn box on the 800×480 screen. Table fields: place, size, font, colour, note. */
 const rows = [];
@@ -239,15 +282,8 @@ el({ s: "main", id: "pc_text", widget: "label", parent: "pc_pill", text: "{USB} 
 
 el({ s: "main", group: "Weather card" });
 el({ s: "main", id: "card_wx", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 88, w: 280, h: 256 },
-     place: "TOP_LEFT 16, 88", size: "280 × 256", color: "card", note: "Card style: radius 16, padding 20." });
-el({ s: "main", id: "wx_sun", widget: "obj", parent: "card_wx", d: { x: 212, y: 126, w: 52, h: 52 }, round: true,
-     style: { background: col("sun") }, place: "TOP_LEFT 176, 18", size: "52 × 52", color: "sun", note: "Radius LV_RADIUS_CIRCLE. Create before the cloud." });
-el({ s: "main", id: "wx_cloud_base", widget: "obj", parent: "card_wx", d: { x: 186, y: 170, w: 88, h: 34 },
-     style: { background: col("cloud"), borderRadius: "17px" }, place: "TOP_LEFT 150, 62", size: "88 × 34", color: "cloud", note: "Radius 17." });
-el({ s: "main", id: "wx_cloud_a", widget: "obj", parent: "card_wx", d: { x: 198, y: 154, w: 40, h: 40 }, round: true,
-     style: { background: col("cloud") }, place: "TOP_LEFT 162, 46", size: "40 × 40", color: "cloud", note: "Circle." });
-el({ s: "main", id: "wx_cloud_b", widget: "obj", parent: "card_wx", d: { x: 226, y: 144, w: 48, h: 48 }, round: true,
-     style: { background: col("cloud") }, place: "TOP_LEFT 190, 36", size: "48 × 48", color: "cloud", note: "Circle." });
+     place: "TOP_LEFT 16, 88", size: "280 × 256", color: "card",
+     note: "Card style: radius 16, padding 20. Tap (LV_EVENT_CLICKED): show card_hourly. Pressed: background tile. Shapes from make_blob are clickable and would catch the tap, so remove LV_OBJ_FLAG_CLICKABLE from them." });
 el({ s: "main", id: "wx_title", widget: "label", parent: "card_wx", text: "WEATHER", font: 14, color: "muted", ls: 1,
      d: { x: 36, y: 108 }, place: "TOP_LEFT 0, 0", size: "auto", note: "text_letter_space 1" });
 el({ s: "main", id: "wx_temp", widget: "label", parent: "card_wx", text: "12°", font: 48, color: "text",
@@ -258,6 +294,11 @@ el({ s: "main", id: "wx_hilo", widget: "label", parent: "card_wx", text: "{UP} 1
      d: { x: 36, y: 236 }, place: "TOP_LEFT 0, 128", size: "auto", note: "LV_SYMBOL_UP / LV_SYMBOL_DOWN in the same label: today's high and low." });
 el({ s: "main", id: "wx_note", widget: "label", parent: "card_wx", text: "Open-Meteo • 14:45", font: 14, color: "dim",
      d: { x: 36, y: 308 }, place: "BOTTOM_LEFT 0, 0", size: "auto", note: "When the weather was last fetched." });
+el({ s: "main", id: "wx_more", widget: "label", parent: "card_wx", text: "Hourly {RIGHT}", font: 14, color: "muted",
+     d: { r: 276, y: 308 }, place: "BOTTOM_RIGHT 0, 0", size: "auto", note: "Shows the card can be tapped. LV_SYMBOL_RIGHT." });
+el({ s: "main", id: "wx_icon", widget: "obj", parent: "card_wx", d: { x: 176, y: 108, w: 104, h: 96 },
+     icon: { code: 2, day: true, bg: "card", scale: 1 }, place: "TOP_LEFT 140, 0", size: "104 × 96",
+     note: "weather_icon_create(card_wx, 140, 0), created last so it draws on top. Animated on the board, drawn here at rest." });
 
 el({ s: "main", group: "Brightness card" });
 el({ s: "main", id: "card_br", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 360, w: 280, h: 104 },
@@ -280,7 +321,7 @@ el({ s: "main", id: "jb_updated", widget: "label", parent: "card_jobs", text: "u
 const tiles = [
   { id: "work", x: 0, n: "2", cap: "working", c: "work" },
   { id: "wait", x: 148, n: "1", cap: "waiting", c: "wait" },
-  { id: "done", x: 296, n: "1", cap: "done", c: "done" }
+  { id: "done", x: 296, n: "2", cap: "done", c: "done" }
 ];
 tiles.forEach(t => {
   const ax = 332 + t.x, ay = 136;
@@ -300,11 +341,11 @@ const jobs = [
   { name: "release-notes", st: "done • 5m ago", c: "done" }
 ];
 jobs.forEach((j, i) => {
-  const ry = 240 + 48 * i, first = i === 0, tag = first ? "" : "_" + (i + 1);
+  const ry = 232 + 48 * i, first = i === 0, tag = first ? "" : "_" + (i + 1);
   el({ s: "main", id: "row" + tag || "row", widget: "obj", parent: "card_jobs", spec: first, d: { x: 332, y: ry, w: 432, h: 48 },
        style: i < 3 ? { boxShadow: "inset 0 -1px 0 " + col("line") } : {},
-       place: "TOP_LEFT 0, " + (132 + 48 * i), size: "432 × 48", color: "line",
-       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row. Rows 2–4: y 180, 228, 276." });
+       place: "TOP_LEFT 0, " + (124 + 48 * i), size: "432 × 48", color: "line",
+       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row. Rows 2–4: y 172, 220, 268. Waiting jobs first, then working, then done." });
   el({ s: "main", id: "row_dot" + tag, widget: "obj", parent: "row", spec: first, d: { x: 332, y: ry + 18, w: 12, h: 12 }, round: true,
        style: { background: col(j.c) }, place: "TOP_LEFT 0, 18", size: "12 × 12", color: j.c, note: "Circle in the job's state colour." });
   el({ s: "main", id: "row_name" + tag, widget: "label", parent: "row", spec: first, text: j.name, font: 24, color: "text", cut: true,
@@ -313,6 +354,61 @@ jobs.forEach((j, i) => {
   el({ s: "main", id: "row_state" + tag, widget: "label", parent: "row", spec: first, text: j.st, font: 14, color: j.c,
        d: { r: 764, y: ry + 16 }, place: "RIGHT_MID 0, 0", size: "auto", note: "State and how long, in the state colour." });
 });
+el({ s: "main", id: "jb_more", widget: "label", parent: "card_jobs", text: "+1 more in Talpy Den", font: 14, color: "muted",
+     d: { x: 356, y: 428 }, place: "BOTTOM_LEFT 24, 0", size: "auto",
+     note: "Jobs that didn't get a row, lined up with the job names. Hidden while every job fits. The tiles count these too." });
+
+/* ---------- hourly forecast: tap the weather card ---------- */
+["clock", "date", "pc_pill", "pc_text"].forEach(id => { rows.find(r => r.id === id).hdr = true; });
+const hours = [
+  { h: "Now",   code: 2,  day: true,  t: 12, rain: 10 },
+  { h: "15:00", code: 3,  day: true,  t: 12, rain: 20 },
+  { h: "16:00", code: 61, day: true,  t: 11, rain: 60 },
+  { h: "17:00", code: 63, day: false, t: 10, rain: 70 },
+  { h: "18:00", code: 61, day: false, t: 9,  rain: 45 },
+  { h: "19:00", code: 3,  day: false, t: 8,  rain: 20 },
+  { h: "20:00", code: 2,  day: false, t: 8,  rain: 10 },
+  { h: "21:00", code: 0,  day: false, t: 7,  rain: 5 }
+];
+el({ s: "hourly", group: "Hourly card (the header above it stays live)" });
+el({ s: "hourly", id: "card_hourly", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 88, w: 768, h: 376 },
+     place: "TOP_LEFT 16, 88", size: "768 × 376", color: "card",
+     note: "Card style. Create it after the other three cards so it covers them, then add LV_OBJ_FLAG_HIDDEN. Leave it clickable (the default) so taps don't reach the cards underneath. Hide it again after 60 s without a touch. Inner area 728 × 336." });
+el({ s: "hourly", id: "hr_back", widget: "button", parent: "card_hourly", d: { x: 36, y: 108, w: 120, h: 44 },
+     style: { background: col("tile"), borderRadius: "12px" }, place: "TOP_LEFT 0, 0", size: "120 × 44", color: "tile",
+     note: "Radius 12, border 0, shadow 0. Pressed: background line. Tap: add LV_OBJ_FLAG_HIDDEN to card_hourly." });
+el({ s: "hourly", id: "hr_back_text", widget: "label", parent: "hr_back", text: "{LEFT} Back", font: 24, color: "text",
+     d: { cx: 96, cy: 130 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_LEFT \" Back\"" });
+el({ s: "hourly", id: "hr_title", widget: "label", parent: "card_hourly", text: "NEXT 8 HOURS", font: 14, color: "muted", ls: 1,
+     d: { x: 176, y: 108 }, place: "TOP_LEFT 140, 0", size: "auto", note: "text_letter_space 1" });
+el({ s: "hourly", id: "hr_summary", widget: "label", parent: "card_hourly", text: "Rain likely from 16:00 to 18:00", font: 24, color: "text", cut: true,
+     d: { x: 176, y: 126, w: 588 }, place: "TOP_LEFT 140, 18", size: "588 × auto",
+     note: "One line about the hours below, sent by the PC. Empty text hides it. LV_LABEL_LONG_DOT." });
+el({ s: "hourly", id: "hr_note", widget: "label", parent: "card_hourly", text: "Open-Meteo • 14:45", font: 14, color: "dim",
+     d: { r: 764, y: 108 }, place: "TOP_RIGHT 0, 0", size: "auto", note: "Same fetch time as wx_note." });
+
+el({ s: "hourly", group: "Hour columns: 8, now on the left" });
+hours.forEach((h, i) => {
+  const x0 = 36 + 91 * i, y0 = 172, mid = x0 + 45.5, first = i === 0, tag = first ? "" : "_" + (i + 1);
+  el({ s: "hourly", id: "hr_col" + tag, widget: "obj", parent: "card_hourly", spec: first, d: { x: x0, y: y0, w: 91, h: 272 },
+       style: first ? { background: col("tile"), borderRadius: "12px" } : {}, place: "TOP_LEFT 0, 64", size: "91 × 272", color: "tile",
+       note: "Padding 0, border 0, not clickable. Only the first column (now) has a background: tile, radius 12. Columns 2–8: x 91, 182, 273, 364, 455, 546, 637." });
+  el({ s: "hourly", id: "hr_hour" + tag, widget: "label", parent: "hr_col", spec: first, text: h.h, font: 14, color: first ? "text" : "muted",
+       d: { cx: mid, y: y0 + 18 }, place: "TOP_MID 0, 18", size: "auto", note: "“Now” in text colour. The other hours muted, as HH:00." });
+  el({ s: "hourly", id: "hr_icon" + tag, widget: "obj", parent: "hr_col", spec: first, d: { x: x0 + 19, y: y0 + 44, w: 52, h: 48 },
+       icon: { code: h.code, day: h.day, bg: first ? "tile" : "card", scale: 0.5 }, place: "TOP_MID 0, 44", size: "52 × 48",
+       note: "The weather_icon shapes at half size (every x, y, w and h divided by 2), not animated. The moon's cut-out disc takes the column's background: tile in the first column, card in the rest." });
+  el({ s: "hourly", id: "hr_temp" + tag, widget: "label", parent: "hr_col", spec: first, text: h.t + "°", font: 24, color: "text",
+       d: { cx: mid, y: y0 + 100 }, place: "TOP_MID 0, 100", size: "auto" });
+  el({ s: "hourly", id: "hr_rain" + tag, widget: "label", parent: "hr_col", spec: first, text: h.rain + "%", font: 14, color: h.rain >= 50 ? "rain" : "muted",
+       d: { cx: mid, y: y0 + 216 }, place: "TOP_MID 0, 216", size: "auto", note: "Chance of rain. Rain colour at 50% and above, muted below." });
+  el({ s: "hourly", id: "hr_rain_bar" + tag, widget: "bar", parent: "hr_col", spec: first, value: h.rain, d: { x: x0 + 17, y: y0 + 242, w: 56, h: 6 },
+       place: "TOP_MID 0, 242", size: "56 × 6", color: "rain", note: "lv_bar, range 0–100, no animation. MAIN: line colour. INDICATOR: rain colour. Both radius 3." });
+});
+el({ s: "hourly", group: "Temperature line" });
+el({ s: "hourly", id: "hr_chart", widget: "chart", parent: "card_hourly", values: hours.map(h => h.t), d: { x: 81, y: 316, w: 637, h: 56 },
+     place: "TOP_LEFT 45, 208", size: "637 × 56", color: "text",
+     note: "lv_chart, type LINE, 8 points, one series in text colour. Create it after the columns so it draws over them. No background, border, padding or division lines. Line width 3; INDICATOR width and height 8 for the dots. Y range: coldest − 2 to warmest + 2, so no dot touches the edge. At width 637 the points fall 91 px apart, on the column centres." });
 
 /* ---------- alert screen (step 9) ---------- */
 el({ s: "alert", group: "Alert, on lv_layer_top()" });
@@ -346,7 +442,8 @@ let mode = "main";
 
 function draw() {
   stage.innerHTML = "";
-  const list = rows.filter(r => r.id && (r.s === "main" || (mode === "alert" && r.s === "alert")));
+  // normal: the main screen; alert: main + alert on top; hourly: the header + the hourly card
+  const list = rows.filter(r => r.id && (r.s === mode || (r.s === "main" && (mode === "alert" || (mode === "hourly" && r.hdr)))));
   const made = {};
   list.forEach(r => {
     const n = document.createElement("div");
@@ -364,7 +461,7 @@ function draw() {
       n.innerHTML = withSym(r.text);
       if (d.w) n.style.width = d.w + "px";
       if (d.r !== undefined) { n.style.right = (800 - d.r) + "px"; n.style.top = d.y + "px"; }
-      else if (d.cx !== undefined) { n.style.left = d.cx + "px"; n.style.top = (d.cy - LH[r.font] / 2) + "px"; n.style.transform = "translateX(-50%)"; }
+      else if (d.cx !== undefined) { n.style.left = d.cx + "px"; n.style.top = (d.y !== undefined ? d.y : d.cy - LH[r.font] / 2) + "px"; n.style.transform = "translateX(-50%)"; }
       else if (d.after === undefined) { n.style.left = d.x + "px"; n.style.top = d.y + "px"; }
     } else if (r.widget === "slider") {
       n.style.left = d.x + "px"; n.style.top = (d.y - 9) + "px"; n.style.width = d.w + "px"; n.style.height = "28px";
@@ -373,12 +470,42 @@ function draw() {
         '<div style="position:absolute;left:0;right:0;top:9px;height:10px;border-radius:5px;background:' + col("tile") + '"></div>' +
         '<div style="position:absolute;left:0;top:9px;height:10px;width:' + (v * 100) + '%;border-radius:5px;background:' + col("text") + '"></div>' +
         '<div style="position:absolute;top:0;left:calc(' + (v * 100) + '% - 14px);width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>';
+    } else if (r.widget === "bar") {
+      n.style.left = d.x + "px"; n.style.top = d.y + "px"; n.style.width = d.w + "px"; n.style.height = d.h + "px";
+      n.style.borderRadius = "3px"; n.style.background = col("line");
+      n.innerHTML = '<div style="height:100%;border-radius:3px;width:' + r.value + '%;background:' + col("rain") + '"></div>';
+    } else if (r.widget === "chart") {
+      n.style.left = d.x + "px"; n.style.top = d.y + "px"; n.style.width = d.w + "px"; n.style.height = d.h + "px";
+      const v = r.values, lo = Math.min(...v) - 2, hi = Math.max(...v) + 2, step = d.w / (v.length - 1);
+      const pts = v.map((t, i) => [i * step, d.h * (hi - t) / (hi - lo)]);
+      n.innerHTML = '<svg width="' + d.w + '" height="' + d.h + '" style="display:block;overflow:visible" aria-hidden="true">' +
+        '<polyline points="' + pts.map(p => p.join(",")).join(" ") + '" fill="none" stroke="' + col("text") + '" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>' +
+        pts.map(p => '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="' + col("text") + '"/>').join("") + "</svg>";
     } else {
       n.style.left = d.x + "px"; n.style.top = d.y + "px"; n.style.width = d.w + "px"; n.style.height = d.h + "px";
       if (r.card) { n.style.background = col("card"); n.style.borderRadius = "16px"; }
       if (r.round) n.style.borderRadius = "50%";
       if (r.style) Object.assign(n.style, r.style);
+      if (r.icon) {
+        const k = r.icon.scale;
+        n.style.overflow = "hidden";
+        iconShapes(r.icon.code, r.icon.day, r.icon.bg).forEach(p => {
+          if (p.bolt) {
+            n.insertAdjacentHTML("beforeend", '<svg aria-hidden="true" style="position:absolute;left:' + 43 * k + "px;top:" + 41 * k + 'px" width="' + 20 * k + '" height="' + 48 * k +
+              '" viewBox="-3 -3 20 48"><polyline points="14,0 4,20 14,20 2,42" fill="none" stroke="' + col("sun") + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+            return;
+          }
+          const b = document.createElement("div");
+          b.style.cssText = "position:absolute;border-radius:9999px;left:" + p.x * k + "px;top:" + p.y * k + "px;width:" + p.w * k +
+            "px;height:" + p.h * k + "px;background:" + col(p.c) + (p.o ? ";opacity:" + p.o : "");
+          n.appendChild(b);
+        });
+      }
     }
+    // Like the board: the weather card opens the hourly card, Back closes it.
+    const go = mode === "main" && (r.id === "card_wx" || r.parent === "card_wx") ? "hourly"
+             : mode === "hourly" && (r.id === "hr_back" || r.parent === "hr_back") ? "main" : null;
+    if (go) { n.classList.add("tap"); n.addEventListener("click", () => setMode(go)); }
     n.addEventListener("mouseenter", () => pick(r.id, true));
     n.addEventListener("mouseleave", () => pick(r.id, false));
     stage.appendChild(n);
@@ -424,8 +551,23 @@ function table() {
     }
     body.appendChild(tr);
   });
-  document.getElementById("spec-title").textContent = mode === "main" ? "Every element: normal screen" : "Every element: alert (drawn over the normal screen)";
+  document.getElementById("spec-title").textContent = MODES[mode].title;
 }
+
+const MODES = {
+  main: {
+    btn: "btn-main", hash: "normal", title: "Every element: normal screen",
+    caption: "Tap the weather card to open the hourly forecast, as on the board. Hover a row in the table below to find its box on the screen. Example data: 5 jobs (2 working, 1 waiting, 2 done), so the fifth is counted in “+1 more”."
+  },
+  hourly: {
+    btn: "btn-hourly", hash: "hourly", title: "Every element: hourly forecast (the header stays from the normal screen)",
+    caption: "Tap Back to return. Example data: rain this afternoon, clearing after dark. On the board each column comes from Open-Meteo's hourly <code>temperature_2m</code>, <code>weather_code</code>, <code>is_day</code> and <code>precipitation_probability</code>."
+  },
+  alert: {
+    btn: "btn-alert", hash: "alert", title: "Every element: alert (drawn over the normal screen)",
+    caption: "The alert covers whichever screen is showing. Hover a row in the table below to find its box on the screen."
+  }
+};
 
 function swatches() {
   const box = document.getElementById("swatches");
@@ -438,24 +580,25 @@ function fit() { stage.style.setProperty("--k", wrap.clientWidth / 800); }
 
 function setMode(m) {
   mode = m;
-  document.getElementById("btn-main").setAttribute("aria-pressed", m === "main");
-  document.getElementById("btn-alert").setAttribute("aria-pressed", m === "alert");
+  Object.entries(MODES).forEach(([k, v]) => document.getElementById(v.btn).setAttribute("aria-pressed", k === m));
   draw(); table();
-  try { history.replaceState(null, "", m === "alert" ? "#alert" : "#normal"); } catch (e) {}
+  document.getElementById("caption").innerHTML = MODES[m].caption;
+  try { history.replaceState(null, "", "#" + MODES[m].hash); } catch (e) {}
 }
 
-document.getElementById("btn-main").addEventListener("click", () => setMode("main"));
-document.getElementById("btn-alert").addEventListener("click", () => setMode("alert"));
+Object.entries(MODES).forEach(([k, v]) => document.getElementById(v.btn).addEventListener("click", () => setMode(k)));
 document.getElementById("show-boxes").addEventListener("change", e => stage.classList.toggle("boxes", e.target.checked));
-const wantAlert = () => location.hash === "#alert" || location.hash === "#png-alert";
-window.addEventListener("hashchange", () => setMode(wantAlert() ? "alert" : "main"));
+const modeFromHash = () => {
+  const h = location.hash.replace(/^#(png-)?/, "");
+  return h === "alert" ? "alert" : h === "hourly" ? "hourly" : "main";
+};
+window.addEventListener("hashchange", () => setMode(modeFromHash()));
 new ResizeObserver(fit).observe(wrap);
 
 if (location.hash.indexOf("#png-") === 0) document.body.classList.add("png");
 swatches();
 fit();
-setMode(wantAlert() ? "alert" : "main");
-if (document.body.classList.contains("png")) history.replaceState(null, "", location.hash);
+setMode(modeFromHash());
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
 </script>
 </body>

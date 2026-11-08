@@ -24,11 +24,26 @@ def send(ser, type_, **fields):
 
 send(ser, "weather", temp=50, hi=10, lo=-7, code=2, day=False, updated="14:45")
 
+# Every job, not only 4. The board counts them all, shows waiting ones first,
+# and puts the rest in "+N more in Talpy Den". state: "working", "waiting" or "done".
+send(
+    ser,
+    "jobs",
+    updated=time.strftime("%H:%M:%S"),
+    rows=[
+        {"name": "desk-display-gadget", "state": "waiting", "detail": "3m"},
+        {"name": "quick-chat-next", "state": "working", "detail": "12m"},
+        {"name": "fix-serial-parser", "state": "working", "detail": "41m"},
+        {"name": "hourly-forecast-ui", "state": "working", "detail": "2m"},
+        {"name": "release-notes", "state": "done", "detail": "5m ago"},
+        {"name": "talpy-den-docs", "state": "done", "detail": "1h ago"},
+    ],
+)
+
 sys.exit()
 
 while True:  # outer: every 10 minutes
-    msg = {"epoch": int(time.time()), "tz": tz}
-    ser.write((json.dumps(msg) + "\n").encode())
+    send(ser, "time", epoch=int(time.time()), tz=tz)
 
     while True:  # inner: read the answer
         raw = ser.readline()  # b"" after 1 s of silence

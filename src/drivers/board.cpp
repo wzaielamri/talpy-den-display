@@ -11,7 +11,7 @@ static bool i2cScanForAddress(uint8_t address) {
 }
 
 void board_init() {
-    Serial.setRxBufferSize(1024);
+    Serial.setRxBufferSize(4096);
     Serial.begin(115200);
 
     Wire.begin(15, 16);

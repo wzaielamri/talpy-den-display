@@ -19,6 +19,7 @@ typedef struct {
 
 static lv_obj_t *jb_title;
 static lv_obj_t *jb_updated;
+static lv_obj_t *jb_more;
 static count_tile_t tile_work, tile_wait, tile_done;
 static job_row_t rows[JOBS_ROWS];
 
@@ -52,12 +53,12 @@ static count_tile_t make_count_tile(lv_obj_t *parent, int x, const char *caption
     return t;
 }
 
-// Spec: 432 x 48 at (0, 132 + 48*i), no background, padding 0, 1 px divider at the bottom.
+// Spec: 432 x 48 at (0, 124 + 48*i), no background, padding 0, 1 px divider at the bottom.
 static job_row_t make_job_row(lv_obj_t *parent, int i) {
     job_row_t r;
     r.row = lv_obj_create(parent);
     lv_obj_set_size(r.row, lv_pct(100), 48);
-    lv_obj_set_pos(r.row, 0, 132 + 48 * i);
+    lv_obj_set_pos(r.row, 0, 124 + 48 * i);
     lv_obj_set_style_bg_opa(r.row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_radius(r.row, 0, 0);
     lv_obj_set_style_pad_all(r.row, 0, 0);
@@ -87,40 +88,62 @@ static void update_dividers(void) {
     }
 }
 
-void card_jobs_set_updated(const char *time) {
-    if (!jb_updated) return; // card not created yet
-    lv_label_set_text_fmt(jb_updated, "updated %s", time ? time : "--:--:--");
-}
-
-void card_jobs_set_counts(int working, int waiting, int done) {
-    if (!tile_wait.tile) return;
+static void set_counts(int working, int waiting, int done) {
     lv_label_set_text_fmt(tile_work.num, "%d", working);
     lv_label_set_text_fmt(tile_wait.num, "%d", waiting);
     lv_label_set_text_fmt(tile_done.num, "%d", done);
     lv_obj_set_style_border_opa(tile_wait.tile, waiting > 0 ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 }
 
-void card_jobs_set_row(int i, const char *name, job_state_t state, const char *detail) {
-    if (i < 0 || i >= JOBS_ROWS || !rows[i].row) return;
+// Row i: coloured dot, name, and "<state> • <detail>" on the right, e.g. "waiting • 3m".
+static void show_row(int i, const job_info_t *job) {
     job_row_t *r = &rows[i];
-    lv_color_t c = lv_color_hex(state_color(state));
+    lv_color_t c = lv_color_hex(state_color(job->state));
 
     lv_obj_set_style_bg_color(r->dot, c, 0);
-    lv_label_set_text(r->name, name ? name : "--");
+    lv_label_set_text(r->name, job->name ? job->name : "--");
     lv_obj_set_style_text_color(r->state, c, 0);
-    if (detail && detail[0])
-        lv_label_set_text_fmt(r->state, "%s " LV_SYMBOL_BULLET " %s", state_word(state), detail);
+    if (job->detail && job->detail[0])
+        lv_label_set_text_fmt(r->state, "%s " LV_SYMBOL_BULLET " %s", state_word(job->state), job->detail);
     else
-        lv_label_set_text(r->state, state_word(state));
-
+        lv_label_set_text(r->state, state_word(job->state));
     lv_obj_remove_flag(r->row, LV_OBJ_FLAG_HIDDEN);
-    update_dividers();
 }
 
-void card_jobs_hide_row(int i) {
-    if (i < 0 || i >= JOBS_ROWS || !rows[i].row) return;
-    lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN);
+void card_jobs_set(const job_update_t *u) {
+    if (!u || !jb_more) return; // no data, or card not created yet
+    int n = u->jobs ? u->count : 0;
+
+    // The tiles count every job, also the ones that don't get a row.
+    int working = 0, waiting = 0, done = 0;
+    for (int i = 0; i < n; i++) {
+        switch (u->jobs[i].state) {
+        case JOB_WORKING: working++; break;
+        case JOB_WAITING: waiting++; break;
+        case JOB_DONE:    done++;    break;
+        }
+    }
+    set_counts(working, waiting, done);
+    lv_label_set_text_fmt(jb_updated, "updated %s", u->updated ? u->updated : "--:--:--");
+
+    // Fill the rows from the top: waiting jobs first, then working, then done.
+    static const job_state_t order[] = {JOB_WAITING, JOB_WORKING, JOB_DONE};
+    int shown = 0;
+    for (int k = 0; k < 3; k++)
+        for (int i = 0; i < n && shown < JOBS_ROWS; i++)
+            if (u->jobs[i].state == order[k])
+                show_row(shown++, &u->jobs[i]);
+    for (int i = shown; i < JOBS_ROWS; i++)
+        lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN);
     update_dividers();
+
+    int more = working + waiting + done - shown;
+    if (more > 0) {
+        lv_label_set_text_fmt(jb_more, "+%d more in Talpy Den", more);
+        lv_obj_remove_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void card_jobs_create(lv_obj_t *parent) {
@@ -143,11 +166,19 @@ void card_jobs_create(lv_obj_t *parent) {
     for (int i = 0; i < JOBS_ROWS; i++)
         rows[i] = make_job_row(parent, i);
 
+    // Spec: under the rows, lined up with the job names. Hidden while every job has a row.
+    jb_more = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "");
+    lv_obj_align(jb_more, LV_ALIGN_BOTTOM_LEFT, 24, 0);
+
     // Made-up values from the design page until your step-7 jobs code sends real ones.
-    card_jobs_set_updated("14:52:05");
-    card_jobs_set_counts(2, 1, 1);
-    card_jobs_set_row(0, "desk-display-gadget", JOB_WAITING, "3m");
-    card_jobs_set_row(1, "quick-chat-next",     JOB_WORKING, "12m");
-    card_jobs_set_row(2, "fix-serial-parser",   JOB_WORKING, "41m");
-    card_jobs_set_row(3, "release-notes",       JOB_DONE,    "5m ago");
+    // Five jobs, so the fifth shows up as "+1 more in Talpy Den".
+    static const job_info_t example[] = {
+        {"desk-display-gadget", JOB_WAITING, "3m"},
+        {"quick-chat-next",     JOB_WORKING, "12m"},
+        {"fix-serial-parser",   JOB_WORKING, "41m"},
+        {"release-notes",       JOB_DONE,    "5m ago"},
+        {"talpy-den-docs",      JOB_DONE,    "1h ago"},
+    };
+    job_update_t u = {example, 5, "14:52:05"};
+    card_jobs_set(&u);
 }
