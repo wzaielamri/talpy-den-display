@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk Display Layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: the 800×480 screen first, drawn at LVGL's real font sizes, then the numbers to build it from. */
+:root {
+  --page: #f3f4f6;
+  --panel: #ffffff;
+  --ink: #171a1f;
+  --soft: #5b6470;
+  --rule: #dcdfe4;
+  --accent: #2f66d8;
+  --hi: rgba(47, 102, 216, 0.14);
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "DejaVu Sans Mono", monospace;
+  --f-device: "Montserrat", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #101317; --panel: #171b21; --ink: #e6e9ed; --soft: #97a0ab;
+    --rule: #2a3038; --accent: #7aa2ff; --hi: rgba(122, 162, 255, 0.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #101317; --panel: #171b21; --ink: #e6e9ed; --soft: #97a0ab;
+  --rule: #2a3038; --accent: #7aa2ff; --hi: rgba(122, 162, 255, 0.16);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.55 var(--f-body);
+  padding: 32px 16px 56px;
+}
+main { max-width: 1040px; margin: 0 auto; display: grid; gap: 36px; }
+h1, h2 { text-wrap: balance; margin: 0; }
+h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 18px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--soft); margin-top: 6px; }
+code, .mono { font-family: var(--f-mono); font-size: 0.92em; }
+
+/* controls */
+.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.seg button {
+  font: 600 14px var(--f-body); color: var(--soft); background: transparent;
+  border: 0; padding: 7px 14px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg button:focus-visible, .check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check { display: inline-flex; gap: 8px; align-items: center; color: var(--soft); font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* the device */
+.bezel {
+  background: #050607; border-radius: 18px; padding: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 32px rgba(0,0,0,0.18);
+  max-width: 828px;
+}
+.wrap { position: relative; width: 100%; aspect-ratio: 800 / 480; overflow: hidden; border-radius: 4px; }
+.stage {
+  position: absolute; left: 0; top: 0; width: 800px; height: 480px;
+  transform-origin: 0 0; transform: scale(var(--k, 1));
+  background: #0e1116; font-family: var(--f-device); font-weight: 500;
+}
+.el { position: absolute; }
+.lbl { white-space: nowrap; }
+.lbl.cut { overflow: hidden; text-overflow: ellipsis; }
+.sym { display: inline-block; width: 0.95em; height: 0.95em; vertical-align: -0.12em; }
+.boxes .el { outline: 1px dashed rgba(122, 200, 255, 0.75); outline-offset: -1px; }
+.el.pick { outline: 2px solid #ff4fd8 !important; outline-offset: 1px; z-index: 50; }
+.caption { color: var(--soft); font-size: 13px; margin-top: 10px; }
+
+/* spec */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; }
+.panel h2 { margin-bottom: 10px; }
+.swatches { display: grid; gap: 8px; }
+.sw { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; }
+.sw i { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); }
+.sw b { font-weight: 600; }
+.sw span { color: var(--soft); font-size: 13px; }
+.sw code { color: var(--soft); }
+ol, ul { margin: 0; padding-left: 20px; }
+li + li { margin-top: 6px; }
+.tablebox { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--soft); font-weight: 600; }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.group td { background: var(--page); font-weight: 600; color: var(--ink); }
+tr[data-id] { cursor: default; }
+tr[data-id]:hover, tr.pick { background: var(--hi); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid var(--rule); }
+.note { color: var(--soft); }
+.fonts td:first-child { font-family: var(--f-mono); }
+@media (prefers-reduced-motion: no-preference) { .seg button { transition: background 0.12s; } }
+/* picture export: #png-normal or #png-alert shows the screen alone at 800×480 */
+body.png { padding: 0; background: #0e1116; }
+body.png main { display: block; max-width: none; }
+body.png main > :not(section:first-of-type), body.png .bar, body.png .caption { display: none; }
+body.png .bezel { padding: 0; border-radius: 0; box-shadow: none; max-width: none; background: none; }
+body.png .wrap { width: 800px; border-radius: 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Desk Display Layout</h1>
+    <p class="lede">The 800 × 480 CrowPanel screen for your clock, weather and Claude jobs, drawn with LVGL's own Montserrat sizes so text takes the room it will take on the board. Build the normal screen in step 5; the alert is for step 9.</p>
+  </header>
+
+  <section aria-label="Screen preview">
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Screen">
+        <button type="button" id="btn-main" aria-pressed="true">Normal</button>
+        <button type="button" id="btn-alert" aria-pressed="false">Alert (step 9)</button>
+      </div>
+      <label class="check" for="show-boxes"><input type="checkbox" id="show-boxes"> Show every box</label>
+    </div>
+    <div class="bezel"><div class="wrap" id="wrap"><div class="stage" id="stage"></div></div></div>
+    <p class="caption">Hover a row in the table below to find its box on the screen. Example data: 2 jobs working, 1 waiting, 1 done.</p>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>Colours</h2>
+      <div class="swatches" id="swatches"></div>
+    </div>
+    <div class="panel">
+      <h2>Fonts</h2>
+      <p class="note" style="margin-bottom:10px">Switch these on in <code>include/lv_conf.h</code>. A label is as tall as its font's line height.</p>
+      <table class="fonts" style="min-width:0">
+        <thead><tr><th>Font</th><th>Line height</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td>montserrat_14</td><td class="num">16 px</td><td>captions, section titles (on by default)</td></tr>
+          <tr><td>montserrat_24</td><td class="num">27 px</td><td>date, job names, weather text</td></tr>
+          <tr><td>montserrat_40</td><td class="num">44 px</td><td>job counts, alert job name</td></tr>
+          <tr><td>montserrat_48</td><td class="num">52 px</td><td>clock, temperature</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:10px">These fonts hold ASCII, <code>°</code>, <code>•</code> and the <code>LV_SYMBOL_…</code> icons. Other characters, such as <code>·</code> or arrows, show as nothing.</p>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>Build it in this order</h2>
+      <ol>
+        <li>Make one card style with <code>lv_style_t</code>: background, radius 16, padding 20, border 0. Add it to each card and remove <code>LV_OBJ_FLAG_SCROLLABLE</code>.</li>
+        <li>Three empty cards in their places. Check the gaps on the board before anything else.</li>
+        <li>Header: clock, date, the PC pill.</li>
+        <li>Weather card, the sun and cloud last (later objects draw on top).</li>
+        <li>Brightness card with your slider and its curve.</li>
+        <li>Jobs card: one row first, then make a function that builds a row and call it four times.</li>
+        <li>Step 9: the alert goes on <code>lv_layer_top()</code>, so it covers the whole screen.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h2>Reading the numbers</h2>
+      <ul>
+        <li><b>Place</b> is the alignment and offset for <code>lv_obj_align(obj, ALIGN, x, y)</code>. <code>TOP_LEFT</code> counts from the top-left corner.</li>
+        <li>Inside a card, offsets count from the card's inner edge, after its padding. A card at x 16 with padding 20 starts its children at x 36 on the screen.</li>
+        <li><b>auto</b> size means <code>LV_SIZE_CONTENT</code>: the label is as wide as its text.</li>
+        <li>Rows 2 to 4 of the job list are row 1 moved down 48 px each.</li>
+        <li>On the screen, y grows downward: y 0 is the top edge.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:12px" id="spec-title">Every element: normal screen</h2>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Element</th><th>Widget</th><th>Parent</th><th>Place</th><th>Size</th><th>Font</th><th>Colour</th><th>Notes</th></tr></thead>
+        <tbody id="spec"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const C = {
+  bg:     { hex: "0E1116", name: "Screen", use: "screen background" },
+  card:   { hex: "171B22", name: "Card", use: "cards, alert box" },
+  tile:   { hex: "1F242D", name: "Tile", use: "count tiles, slider track" },
+  line:   { hex: "262C36", name: "Line", use: "row dividers" },
+  text:   { hex: "E9EDF2", name: "Text", use: "main text, slider fill" },
+  muted:  { hex: "8C96A3", name: "Muted", use: "titles, date, captions" },
+  dim:    { hex: "5D6672", name: "Dim", use: "times, sources" },
+  work:   { hex: "4C9BFF", name: "Working", use: "jobs at work" },
+  wait:   { hex: "FFB547", name: "Waiting", use: "jobs that need you, alert" },
+  done:   { hex: "3DD68C", name: "Done", use: "finished jobs, PC connected" },
+  pcbg:   { hex: "13281D", name: "PC pill", use: "PC connected background" },
+  waitbg: { hex: "3A2C12", name: "Alert badge", use: "bell circle background" },
+  sun:    { hex: "FFCF5A", name: "Sun", use: "weather picture" },
+  cloud:  { hex: "C9D2DD", name: "Cloud", use: "weather picture" }
+};
+const col = k => "#" + C[k].hex;
+const LH = { 14: 16, 24: 27, 40: 44, 48: 52 };
+
+const SYM = {
+  USB: '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 15V2.5M5.8 4.6 8 2l2.2 2.6M8 11.5 4 9V7M8 9.5l4-2.2V5.6"/><circle cx="4" cy="6.2" r="1.1" fill="currentColor"/><rect x="11" y="4.2" width="2" height="2" fill="currentColor" stroke="none"/></svg>',
+  UP: '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5 8 6l4.5 4.5"/></svg>',
+  DOWN: '<svg class="sym" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5 8 10l4.5-4.5"/></svg>',
+  BELL: '<svg class="sym" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5c-2.5 0-4.2 1.9-4.2 4.4v2.6L2.4 11h11.2l-1.4-2.5V5.9C12.2 3.4 10.5 1.5 8 1.5Z"/><path d="M6.2 12.2h3.6a1.8 1.8 0 0 1-3.6 0Z"/></svg>'
+};
+const withSym = t => t.replace(/\{(USB|UP|DOWN|BELL)\}/g, (_, k) => SYM[k]);
+
+/* Every element: d = drawn box on the 800×480 screen. Table fields: place, size, font, colour, note. */
+const rows = [];
+function el(o) { rows.push(o); return o; }
+
+/* ---------- normal screen ---------- */
+el({ s: "main", group: "Header (on the screen)" });
+el({ s: "main", id: "clock", widget: "label", parent: "screen", text: "14:52", font: 48, color: "text",
+     d: { x: 24, y: 16 }, place: "TOP_LEFT 24, 16", size: "auto" });
+el({ s: "main", id: "date", widget: "label", parent: "screen", text: "Friday, 6 November", font: 24, color: "muted",
+     d: { after: "clock", gap: 16, bottomTo: "clock", dy: -6 }, place: "lv_obj_align_to(date, clock, LV_ALIGN_OUT_RIGHT_BOTTOM, 16, -6)", size: "auto",
+     note: "Placed after the clock's text is set, so it follows the clock's width." });
+el({ s: "main", id: "pc_pill", widget: "obj", parent: "screen", d: { x: 616, y: 24, w: 168, h: 32 },
+     style: { background: col("pcbg"), borderRadius: "16px" },
+     place: "TOP_RIGHT -16, 24", size: "168 × 32", color: "pcbg",
+     note: "Radius LV_RADIUS_CIRCLE, border 0, padding 0. Offline: background tile, text muted, “PC offline”." });
+el({ s: "main", id: "pc_text", widget: "label", parent: "pc_pill", text: "{USB} PC connected", font: 14, color: "done",
+     d: { cx: 700, cy: 40 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_USB \" PC connected\"" });
+
+el({ s: "main", group: "Weather card" });
+el({ s: "main", id: "card_wx", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 88, w: 280, h: 256 },
+     place: "TOP_LEFT 16, 88", size: "280 × 256", color: "card", note: "Card style: radius 16, padding 20." });
+el({ s: "main", id: "wx_sun", widget: "obj", parent: "card_wx", d: { x: 212, y: 126, w: 52, h: 52 }, round: true,
+     style: { background: col("sun") }, place: "TOP_LEFT 176, 18", size: "52 × 52", color: "sun", note: "Radius LV_RADIUS_CIRCLE. Create before the cloud." });
+el({ s: "main", id: "wx_cloud_base", widget: "obj", parent: "card_wx", d: { x: 186, y: 170, w: 88, h: 34 },
+     style: { background: col("cloud"), borderRadius: "17px" }, place: "TOP_LEFT 150, 62", size: "88 × 34", color: "cloud", note: "Radius 17." });
+el({ s: "main", id: "wx_cloud_a", widget: "obj", parent: "card_wx", d: { x: 198, y: 154, w: 40, h: 40 }, round: true,
+     style: { background: col("cloud") }, place: "TOP_LEFT 162, 46", size: "40 × 40", color: "cloud", note: "Circle." });
+el({ s: "main", id: "wx_cloud_b", widget: "obj", parent: "card_wx", d: { x: 226, y: 144, w: 48, h: 48 }, round: true,
+     style: { background: col("cloud") }, place: "TOP_LEFT 190, 36", size: "48 × 48", color: "cloud", note: "Circle." });
+el({ s: "main", id: "wx_title", widget: "label", parent: "card_wx", text: "WEATHER", font: 14, color: "muted", ls: 1,
+     d: { x: 36, y: 108 }, place: "TOP_LEFT 0, 0", size: "auto", note: "text_letter_space 1" });
+el({ s: "main", id: "wx_temp", widget: "label", parent: "card_wx", text: "12°", font: 48, color: "text",
+     d: { x: 36, y: 140 }, place: "TOP_LEFT 0, 32", size: "auto" });
+el({ s: "main", id: "wx_cond", widget: "label", parent: "card_wx", text: "Partly cloudy", font: 24, color: "text",
+     d: { x: 36, y: 200 }, place: "TOP_LEFT 0, 92", size: "auto", note: "From the WMO weather code." });
+el({ s: "main", id: "wx_hilo", widget: "label", parent: "card_wx", text: "{UP} 14°&nbsp;&nbsp;&nbsp;{DOWN} 7°", font: 24, color: "muted",
+     d: { x: 36, y: 236 }, place: "TOP_LEFT 0, 128", size: "auto", note: "LV_SYMBOL_UP / LV_SYMBOL_DOWN in the same label: today's high and low." });
+el({ s: "main", id: "wx_note", widget: "label", parent: "card_wx", text: "Open-Meteo • 14:45", font: 14, color: "dim",
+     d: { x: 36, y: 308 }, place: "BOTTOM_LEFT 0, 0", size: "auto", note: "When the weather was last fetched." });
+
+el({ s: "main", group: "Brightness card" });
+el({ s: "main", id: "card_br", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 360, w: 280, h: 104 },
+     place: "TOP_LEFT 16, 360", size: "280 × 104", color: "card", note: "Card style." });
+el({ s: "main", id: "br_title", widget: "label", parent: "card_br", text: "BRIGHTNESS", font: 14, color: "muted", ls: 1,
+     d: { x: 36, y: 380 }, place: "TOP_LEFT 0, 0", size: "auto" });
+el({ s: "main", id: "br_value", widget: "label", parent: "card_br", text: "72%", font: 14, color: "text",
+     d: { r: 276, y: 380 }, place: "TOP_RIGHT 0, 0", size: "auto", note: "Updated in the slider's event." });
+el({ s: "main", id: "br_slider", widget: "slider", parent: "card_br", d: { x: 36, y: 418, w: 240, h: 10 }, value: 72,
+     place: "TOP_LEFT 0, 38", size: "240 × 10", color: "tile",
+     note: "MAIN: tile. INDICATOR: text. KNOB: white, pad 9 (28 px knob). ext_click_area 20. Range 0–100 with your curve." });
+
+el({ s: "main", group: "Jobs card" });
+el({ s: "main", id: "card_jobs", widget: "obj", parent: "screen", card: true, d: { x: 312, y: 88, w: 472, h: 376 },
+     place: "TOP_LEFT 312, 88", size: "472 × 376", color: "card", note: "Card style. Inner area 432 × 336." });
+el({ s: "main", id: "jb_title", widget: "label", parent: "card_jobs", text: "CLAUDE JOBS", font: 14, color: "muted", ls: 1,
+     d: { x: 332, y: 108 }, place: "TOP_LEFT 0, 0", size: "auto" });
+el({ s: "main", id: "jb_updated", widget: "label", parent: "card_jobs", text: "updated 14:52:05", font: 14, color: "dim",
+     d: { r: 764, y: 108 }, place: "TOP_RIGHT 0, 0", size: "auto", note: "Time of the last message from the PC." });
+const tiles = [
+  { id: "work", x: 0, n: "2", cap: "working", c: "work" },
+  { id: "wait", x: 148, n: "1", cap: "waiting", c: "wait" },
+  { id: "done", x: 296, n: "1", cap: "done", c: "done" }
+];
+tiles.forEach(t => {
+  const ax = 332 + t.x, ay = 136;
+  el({ s: "main", id: "tile_" + t.id, widget: "obj", parent: "card_jobs", d: { x: ax, y: ay, w: 136, h: 88 },
+       style: Object.assign({ background: col("tile"), borderRadius: "12px" }, t.id === "wait" ? { boxShadow: "inset 0 0 0 2px " + col("wait") } : {}),
+       place: "TOP_LEFT " + t.x + ", 28", size: "136 × 88", color: "tile",
+       note: t.id === "wait" ? "Radius 12, padding 12. Border 2 px waiting colour while the count is above 0." : "Radius 12, padding 12, border 0." });
+  el({ s: "main", id: "tile_" + t.id + "_num", widget: "label", parent: "tile_" + t.id, text: t.n, font: 40, color: t.c,
+       d: { x: ax + 12, y: ay + 12 }, place: "TOP_LEFT 0, 0", size: "auto" });
+  el({ s: "main", id: "tile_" + t.id + "_cap", widget: "label", parent: "tile_" + t.id, text: t.cap, font: 14, color: "muted",
+       d: { x: ax + 12, y: ay + 60 }, place: "TOP_LEFT 0, 48", size: "auto" });
+});
+const jobs = [
+  { name: "desk-display-gadget", st: "waiting • 3m", c: "wait" },
+  { name: "quick-chat-next", st: "working • 12m", c: "work" },
+  { name: "fix-serial-parser", st: "working • 41m", c: "work" },
+  { name: "release-notes", st: "done • 5m ago", c: "done" }
+];
+jobs.forEach((j, i) => {
+  const ry = 240 + 48 * i, first = i === 0, tag = first ? "" : "_" + (i + 1);
+  el({ s: "main", id: "row" + tag || "row", widget: "obj", parent: "card_jobs", spec: first, d: { x: 332, y: ry, w: 432, h: 48 },
+       style: i < 3 ? { boxShadow: "inset 0 -1px 0 " + col("line") } : {},
+       place: "TOP_LEFT 0, " + (132 + 48 * i), size: "432 × 48", color: "line",
+       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row. Rows 2–4: y 180, 228, 276." });
+  el({ s: "main", id: "row_dot" + tag, widget: "obj", parent: "row", spec: first, d: { x: 332, y: ry + 18, w: 12, h: 12 }, round: true,
+       style: { background: col(j.c) }, place: "TOP_LEFT 0, 18", size: "12 × 12", color: j.c, note: "Circle in the job's state colour." });
+  el({ s: "main", id: "row_name" + tag, widget: "label", parent: "row", spec: first, text: j.name, font: 24, color: "text", cut: true,
+       d: { x: 356, y: ry + 10, w: 280 }, place: "TOP_LEFT 24, 10", size: "280 × auto",
+       note: "Long mode LV_LABEL_LONG_DOT, so a long name ends in …" });
+  el({ s: "main", id: "row_state" + tag, widget: "label", parent: "row", spec: first, text: j.st, font: 14, color: j.c,
+       d: { r: 764, y: ry + 16 }, place: "RIGHT_MID 0, 0", size: "auto", note: "State and how long, in the state colour." });
+});
+
+/* ---------- alert screen (step 9) ---------- */
+el({ s: "alert", group: "Alert, on lv_layer_top()" });
+el({ s: "alert", id: "scrim", widget: "obj", parent: "lv_layer_top()", d: { x: 0, y: 0, w: 800, h: 480 },
+     style: { background: "rgba(0,0,0,0.6)" }, place: "TOP_LEFT 0, 0", size: "800 × 480", color: "bg",
+     note: "Black, bg_opa LV_OPA_60, radius 0, border 0. Clickable, so taps don't reach the screen behind." });
+el({ s: "alert", id: "alert_box", widget: "obj", parent: "scrim", d: { x: 120, y: 110, w: 560, h: 260 },
+     style: { background: col("card"), borderRadius: "20px", boxShadow: "inset 6px 0 0 " + col("wait") },
+     place: "CENTER 0, 0", size: "560 × 260", color: "card",
+     note: "Radius 20, padding 28. Border 6 px waiting colour, border_side LEFT only. Inner area 504 × 204." });
+el({ s: "alert", id: "al_badge", widget: "obj", parent: "alert_box", d: { x: 148, y: 138, w: 40, h: 40 }, round: true,
+     style: { background: col("waitbg") }, place: "TOP_LEFT 0, 0", size: "40 × 40", color: "waitbg", note: "Circle." });
+el({ s: "alert", id: "al_bell", widget: "label", parent: "al_badge", text: "{BELL}", font: 24, color: "wait",
+     d: { cx: 168, cy: 158 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_BELL" });
+el({ s: "alert", id: "al_kicker", widget: "label", parent: "alert_box", text: "WAITING FOR YOU", font: 14, color: "wait", ls: 1,
+     d: { x: 200, y: 150 }, place: "TOP_LEFT 52, 12", size: "auto", note: "text_letter_space 1" });
+el({ s: "alert", id: "al_name", widget: "label", parent: "alert_box", text: "desk-display-gadget", font: 40, color: "text", cut: true,
+     d: { x: 148, y: 198, w: 504 }, place: "TOP_LEFT 0, 60", size: "504 × auto", note: "LV_LABEL_LONG_DOT" });
+el({ s: "alert", id: "al_detail", widget: "label", parent: "alert_box", text: "Claude asked a question • 14:52", font: 24, color: "muted",
+     d: { x: 148, y: 250 }, place: "TOP_LEFT 0, 112", size: "auto" });
+el({ s: "alert", id: "al_ok", widget: "button", parent: "alert_box", d: { x: 512, y: 290, w: 140, h: 52 },
+     style: { background: col("wait"), borderRadius: "12px" }, place: "BOTTOM_RIGHT 0, 0", size: "140 × 52", color: "wait",
+     note: "Tap: delete the scrim (its children go with it)." });
+el({ s: "alert", id: "al_ok_text", widget: "label", parent: "al_ok", text: "OK", font: 24, color: "bg",
+     d: { cx: 582, cy: 316 }, place: "CENTER 0, 0", size: "auto" });
+
+/* ---------- draw ---------- */
+const stage = document.getElementById("stage");
+const wrap = document.getElementById("wrap");
+let mode = "main";
+
+function draw() {
+  stage.innerHTML = "";
+  const list = rows.filter(r => r.id && (r.s === "main" || (mode === "alert" && r.s === "alert")));
+  const made = {};
+  list.forEach(r => {
+    const n = document.createElement("div");
+    n.className = "el";
+    n.dataset.id = r.id;
+    const d = r.d;
+    if (r.widget === "label") {
+      n.classList.add("lbl");
+      if (r.cut) n.classList.add("cut");
+      n.style.fontSize = r.font + "px";
+      n.style.lineHeight = LH[r.font] + "px";
+      n.style.height = LH[r.font] + "px";
+      n.style.color = col(r.color);
+      if (r.ls) n.style.letterSpacing = r.ls + "px";
+      n.innerHTML = withSym(r.text);
+      if (d.w) n.style.width = d.w + "px";
+      if (d.r !== undefined) { n.style.right = (800 - d.r) + "px"; n.style.top = d.y + "px"; }
+      else if (d.cx !== undefined) { n.style.left = d.cx + "px"; n.style.top = (d.cy - LH[r.font] / 2) + "px"; n.style.transform = "translateX(-50%)"; }
+      else if (d.after === undefined) { n.style.left = d.x + "px"; n.style.top = d.y + "px"; }
+    } else if (r.widget === "slider") {
+      n.style.left = d.x + "px"; n.style.top = (d.y - 9) + "px"; n.style.width = d.w + "px"; n.style.height = "28px";
+      const v = r.value / 100;
+      n.innerHTML =
+        '<div style="position:absolute;left:0;right:0;top:9px;height:10px;border-radius:5px;background:' + col("tile") + '"></div>' +
+        '<div style="position:absolute;left:0;top:9px;height:10px;width:' + (v * 100) + '%;border-radius:5px;background:' + col("text") + '"></div>' +
+        '<div style="position:absolute;top:0;left:calc(' + (v * 100) + '% - 14px);width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>';
+    } else {
+      n.style.left = d.x + "px"; n.style.top = d.y + "px"; n.style.width = d.w + "px"; n.style.height = d.h + "px";
+      if (r.card) { n.style.background = col("card"); n.style.borderRadius = "16px"; }
+      if (r.round) n.style.borderRadius = "50%";
+      if (r.style) Object.assign(n.style, r.style);
+    }
+    n.addEventListener("mouseenter", () => pick(r.id, true));
+    n.addEventListener("mouseleave", () => pick(r.id, false));
+    stage.appendChild(n);
+    made[r.id] = n;
+  });
+  // labels placed next to another label, like lv_obj_align_to
+  list.filter(r => r.d.after).forEach(r => {
+    const a = made[r.d.after], b = made[r.id], ad = rows.find(x => x.id === r.d.after);
+    const left = ad.d.x + a.offsetWidth + r.d.gap;
+    const top = ad.d.y + LH[ad.font] - LH[r.font] + r.d.dy;
+    b.style.left = left + "px"; b.style.top = top + "px";
+  });
+}
+
+function pick(id, on) {
+  stage.querySelectorAll(".el").forEach(n => n.classList.toggle("pick", on && n.dataset.id === id));
+  document.querySelectorAll("tr[data-id]").forEach(t => t.classList.toggle("pick", on && t.dataset.id === id));
+}
+
+function table() {
+  const body = document.getElementById("spec");
+  body.innerHTML = "";
+  rows.filter(r => r.s === mode && r.spec !== false).forEach(r => {
+    const tr = document.createElement("tr");
+    if (r.group) {
+      tr.className = "group";
+      tr.innerHTML = '<td colspan="8">' + r.group + "</td>";
+    } else {
+      tr.dataset.id = r.id;
+      const c = r.color ? '<span class="dot" style="background:' + col(r.color) + '"></span>' + C[r.color].name : "";
+      const label = r.text ? ' <span class="note">“' + r.text.replace(/\{(\w+)\}/g, "[$1]").replace(/&nbsp;/g, " ") + "”</span>" : "";
+      tr.innerHTML =
+        '<td class="mono">' + r.id + label + "</td>" +
+        "<td>" + r.widget + "</td>" +
+        '<td class="mono">' + r.parent + "</td>" +
+        '<td class="num">' + r.place + "</td>" +
+        '<td class="num">' + r.size + "</td>" +
+        "<td>" + (r.font ? "montserrat_" + r.font : "") + "</td>" +
+        "<td>" + c + "</td>" +
+        '<td class="note">' + (r.note || "") + "</td>";
+      tr.addEventListener("mouseenter", () => pick(r.id, true));
+      tr.addEventListener("mouseleave", () => pick(r.id, false));
+    }
+    body.appendChild(tr);
+  });
+  document.getElementById("spec-title").textContent = mode === "main" ? "Every element: normal screen" : "Every element: alert (drawn over the normal screen)";
+}
+
+function swatches() {
+  const box = document.getElementById("swatches");
+  box.innerHTML = Object.values(C).map(c =>
+    '<div class="sw"><i style="background:#' + c.hex + '"></i><div><b>' + c.name + "</b> <span>" + c.use + '</span></div><code>lv_color_hex(0x' + c.hex + ")</code></div>"
+  ).join("");
+}
+
+function fit() { stage.style.setProperty("--k", wrap.clientWidth / 800); }
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("btn-main").setAttribute("aria-pressed", m === "main");
+  document.getElementById("btn-alert").setAttribute("aria-pressed", m === "alert");
+  draw(); table();
+  try { history.replaceState(null, "", m === "alert" ? "#alert" : "#normal"); } catch (e) {}
+}
+
+document.getElementById("btn-main").addEventListener("click", () => setMode("main"));
+document.getElementById("btn-alert").addEventListener("click", () => setMode("alert"));
+document.getElementById("show-boxes").addEventListener("change", e => stage.classList.toggle("boxes", e.target.checked));
+const wantAlert = () => location.hash === "#alert" || location.hash === "#png-alert";
+window.addEventListener("hashchange", () => setMode(wantAlert() ? "alert" : "main"));
+new ResizeObserver(fit).observe(wrap);
+
+if (location.hash.indexOf("#png-") === 0) document.body.classList.add("png");
+swatches();
+fit();
+setMode(wantAlert() ? "alert" : "main");
+if (document.body.classList.contains("png")) history.replaceState(null, "", location.hash);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+</script>
+</body>
+</html>

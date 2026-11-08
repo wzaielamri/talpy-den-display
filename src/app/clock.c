@@ -8,6 +8,23 @@
 #include <sys/time.h>
 #include <time.h>
 
+
+
+void clock_init(){
+    time_t now;
+    if (rtc_read(&now)) {
+        printf("RTC: %lld\n", (long long)now);
+        struct timeval tv = {};
+        tv.tv_sec = now;
+        settimeofday(&tv, NULL);
+    } else {
+        printf("RTC: not set\n");
+    }
+    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+    tzset();
+
+}
+
 void clock_sync(long long epoch, const char *tz) {
     struct timeval tv = {0};
     tv.tv_sec = epoch;

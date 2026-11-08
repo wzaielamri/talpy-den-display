@@ -1,5 +1,6 @@
 #include "screen_main.h"
 #include "card_brightness.h"
+#include "card_jobs.h"
 #include "card_weather.h"
 #include "header_clock.h"
 #include "header_pc.h"
@@ -22,6 +23,7 @@ void screen_main_create(void) {
     header_pc_create(screen);
     card_weather_create(card_wx);
     card_brightness_create(card_br);
+    card_jobs_create(card_jobs);
 
     lv_screen_load(screen);
 }

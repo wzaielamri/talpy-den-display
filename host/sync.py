@@ -1,4 +1,5 @@
 import json
+import sys
 import time
 
 import serial
@@ -15,6 +16,15 @@ with open("/etc/localtime", "rb") as f:
 ser.reset_input_buffer()
 ser.write(b"\n")
 
+
+def send(ser, type_, **fields):
+    line = json.dumps({"type": type_, **fields}, separators=(",", ":"))
+    ser.write((line + "\n").encode())
+
+
+send(ser, "weather", temp=50, hi=10, lo=-7, code=2, day=False, updated="14:45")
+
+sys.exit()
 
 while True:  # outer: every 10 minutes
     msg = {"epoch": int(time.time()), "tz": tz}
