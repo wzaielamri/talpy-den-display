@@ -223,14 +223,7 @@ void card_hourly_create(lv_obj_t *screen) {
     lv_obj_add_flag(card_hourly, LV_OBJ_FLAG_HIDDEN);
     lv_timer_create(auto_hide, 1000, NULL);
 
-    // Made-up values from the design page until your sync.py sends real ones (step 8).
-    time_t hour = time(NULL) / 3600 * 3600;
-    const hour_t example[HOURLY_COLS] = {
-        {hour,            12, 2,  true,  10}, {hour + 1 * 3600, 12, 3,  true,  20},
-        {hour + 2 * 3600, 11, 61, true,  60}, {hour + 3 * 3600, 10, 63, false, 70},
-        {hour + 4 * 3600, 9,  61, false, 45}, {hour + 5 * 3600, 8,  3,  false, 20},
-        {hour + 6 * 3600, 8,  2,  false, 10}, {hour + 7 * 3600, 7,  0,  false, 5},
-    };
-    hourly_update_t u = {example, HOURLY_COLS, "Rain likely from 16:00 to 18:00", "14:45"};
+    // Until the PC's first hourly message: no columns, no line, the summary says it waits.
+    hourly_update_t u = {NULL, 0, "Waiting for the PC", NULL};
     card_hourly_set(&u);
 }

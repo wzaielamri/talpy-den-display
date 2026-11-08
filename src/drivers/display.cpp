@@ -142,12 +142,3 @@ void display_init() {
     delay(100);
 
 }
-
-bool display_touched(void) {
-    lgfx::touch_point_t point;
-    return gfx._touch_instance.getTouchRaw(&point, 1) > 0;
-}
-
-void display_restart(void) {
-    if (rgb_panel) esp_lcd_rgb_panel_restart(rgb_panel);
-}

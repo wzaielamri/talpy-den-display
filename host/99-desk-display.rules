@@ -1,0 +1,12 @@
+# The desk display (CrowPanel Advance 4.3", its CH340 USB serial chip 1a86:7522): always /dev/desk-display,
+# whatever ttyUSB number it gets, so sync.py and its service find it after a replug or a restart.
+# ModemManager leaves it alone (it would probe it as a modem when plugged).
+#
+#   sudo cp host/99-desk-display.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=tty
+#   ls -l /dev/desk-display
+#
+# The CH340 has no serial number of its own: with a second CH340 plugged (an Arduino clone, say), both
+# would get the name. Then match the USB port instead, e.g. ENV{ID_PATH}=="pci-0000:07:00.3-usb-0:2:1.0"
+# (udevadm info -q property -n /dev/ttyUSB0 | grep ID_PATH), and keep the board in that port.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7522", SYMLINK+="desk-display", ENV{ID_MM_DEVICE_IGNORE}="1"

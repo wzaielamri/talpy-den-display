@@ -78,16 +78,11 @@ void card_weather_create(lv_obj_t *parent){
     // cloud exactly where the design page has them.
     weather_icon_create(parent, 140, 0);
 
-    // Made-up values until the PC sends real ones (plan step 8).
-    weather_update_t w = {
-        .temp = 22,
-        .hi = 25,
-        .lo = 18,
-        .code = 2,     // partly cloudy
-        .is_day = true,
-        .updated = "14:45",
-    };
-    card_weather_set(&w);
+    // Until the PC's first weather message: nothing made up, the card says it waits (no icon yet).
+    lv_label_set_text(wx_temp, "--°");
+    lv_label_set_text(wx_cond, "Waiting for PC");
+    lv_label_set_text(wx_hilo, LV_SYMBOL_UP " --°   " LV_SYMBOL_DOWN " --°");
+    lv_label_set_text(wx_note, "Open-Meteo " LV_SYMBOL_BULLET " --:--");
 }
 
 // ---------- demo: every icon in turn, to check them on the board ----------

@@ -3,6 +3,7 @@
 #include "card_jobs.h"
 #include "card_usage.h"
 #include "card_weather.h"
+#include "clock_face.h"
 #include "header_clock.h"
 #include "header_pc.h"
 #include "lvgl.h"
@@ -30,6 +31,7 @@ void screen_main_create(void) {
     card_usage_create(card_use);
     card_jobs_create(card_jobs);
     card_hourly_create(screen); // after the three cards: it covers them while it shows
+    clock_face_create(screen);  // last: it covers everything (the header too) while it shows
 
     // A tap on the weather card opens the hourly forecast; it shows it's pressed (tile colour).
     lv_obj_add_event_cb(card_wx, weather_clicked, LV_EVENT_CLICKED, NULL);

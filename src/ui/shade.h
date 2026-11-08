@@ -17,6 +17,9 @@ void shade_close(void);
 typedef void (*stay_on_cb_t)(bool on);
 void shade_set_stay_on_callback(stay_on_cb_t cb);
 
+// Put the toggle on or off without calling the callback: the saved setting at start.
+void shade_set_stay_on(bool on);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

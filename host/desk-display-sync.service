@@ -1,0 +1,27 @@
+# sync.py as a systemd user service: it starts with your login, starts again if it stops, and logs to
+# the journal. Your location stays out of the repo, in ~/.config/desk-display.env:
+#
+#   DESK_LAT=0
+#   DESK_LON=0
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp host/desk-display-sync.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now desk-display-sync
+#   journalctl --user -u desk-display-sync -f            # what it sends and what the board says
+#
+# Flashing the board needs its port: systemctl --user stop desk-display-sync, pio run -t upload, start.
+[Unit]
+Description=Desk display: Talpy Den jobs, plan usage, time and weather over USB serial
+Documentation=file://%h/repos/talpy-den-display/host/sync.py
+
+[Service]
+Environment=DESK_PORT=/dev/desk-display
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-%h/.config/desk-display.env
+ExecStart=/usr/bin/python3 %h/repos/talpy-den-display/host/sync.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

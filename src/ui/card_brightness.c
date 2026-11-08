@@ -26,6 +26,12 @@ static void br_slider_event(lv_event_t *e) {
 }
 
 
+void card_brightness_set_value(int32_t percent) {
+    if (!br_slider) return;
+    lv_slider_set_value(br_slider, percent, LV_ANIM_OFF); // (sends no VALUE_CHANGED: no callback)
+    br_set_value_text(percent);
+}
+
 void card_brightness_create(lv_obj_t *parent){
     br_slider = lv_slider_create(parent);
     lv_obj_set_width(br_slider, lv_pct(100)); // the parent's whole width: the pull-down panel's 720

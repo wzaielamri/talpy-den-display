@@ -9,6 +9,7 @@
 #include "ui/card_hourly.h"
 #include "app/job_watch.h"
 #include "ui/header_pc.h"
+#include "ui/clock_face.h"
 #include "app/screen_power.h"
 
 static void handle_time(JsonDocument &doc) {
@@ -35,6 +36,7 @@ static void handle_weather(JsonDocument &doc) {
         .updated = doc["updated"].as<const char *>(),
     };
     card_weather_set(&w);
+    clock_face_set_weather(w.code, w.is_day, w.temp); // (the clock face shows it too)
     Serial.printf("card_weather_set(temp %d, hi %d, lo %d, code %d, day %d, \"%s\")\n",
             w.temp, w.hi, w.lo, w.code, w.is_day, w.updated ? w.updated : "(none)");
 }
@@ -157,6 +159,7 @@ static void set_pc_online(bool online) {
     if (online == pc_online) return;
     pc_online = online;
     header_pc_set_online(online);
+    clock_face_set_pc(online);
     screen_power_pc_present(online);
     Serial.printf("PC %s\n", online ? "back" : "away");
 }
@@ -178,7 +181,15 @@ static void handle_line(const char *line) {
     }
     const char *type = doc["type"] | "";
     last_seen = millis();
-    if (strcmp(type, "power") != 0) set_pc_online(true); // a whole message: the PC is there
+    if (strcmp(type, "power") != 0) { // a whole message: the PC is there
+        static bool heard;            // (the header starts "PC offline": its first message says connected)
+        if (!heard) {
+            heard = true;
+            header_pc_set_online(true);
+            clock_face_set_pc(true);
+        }
+        set_pc_online(true);
+    }
     if      (strcmp(type, "power") == 0)   handle_power(doc);
     else if (strcmp(type, "ping") == 0)    {} // only says the PC is there
     else if (strcmp(type, "time") == 0)    handle_time(doc);

@@ -26,6 +26,7 @@ typedef struct {
 static lv_obj_t *jb_title;
 static lv_obj_t *jb_updated;
 static lv_obj_t *jb_more;
+static lv_obj_t *jb_empty; // in the rows' place: "Waiting for the PC", then "No jobs right now" while none
 static count_tile_t tile_work, tile_wait, tile_done;
 static job_row_t rows[JOBS_ROWS];
 
@@ -254,6 +255,13 @@ void card_jobs_set(const job_update_t *u) {
     } else {
         lv_obj_add_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
     }
+
+    if (shown == 0) {
+        lv_label_set_text(jb_empty, "No jobs right now");
+        lv_obj_remove_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void card_jobs_create(lv_obj_t *parent) {
@@ -283,17 +291,11 @@ void card_jobs_create(lv_obj_t *parent) {
 
     lv_timer_create(age_tick, 10000, NULL);
 
-    // Made-up values from the design page until your step-7 jobs code sends real ones.
-    // Five jobs, so the fifth shows up as "+1 more in Talpy Den". With the clock not set yet
-    // (no RTC time, no PC), since comes out before CLOCK_SET and the rows show the state word alone.
-    time_t now = time(NULL);
-    const job_info_t example[] = {
-        {"desk-display-gadget", JOB_WAITING, now - 3 * 60,  "local"},
-        {"quick-chat-next",     JOB_WORKING, now - 12 * 60, "local"},
-        {"fix-serial-parser",   JOB_WORKING, now - 41 * 60, "lab (ssh)"},
-        {"release-notes",       JOB_DONE,    now - 5 * 60,  "local"},
-        {"talpy-den-docs",      JOB_DONE,    now - 60 * 60, "local"},
-    };
-    job_update_t u = {example, 5, "14:52:05"};
+    // Spec: jb_empty, in the middle of the rows' place. Until the PC's first jobs message: nothing
+    // made up (0 0 0, no rows), the card says it waits.
+    jb_empty = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "");
+    lv_obj_align(jb_empty, LV_ALIGN_TOP_MID, 0, 212);
+    job_update_t u = {NULL, 0, NULL};
     card_jobs_set(&u);
+    lv_label_set_text(jb_empty, "Waiting for the PC");
 }

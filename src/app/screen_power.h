@@ -6,44 +6,33 @@
 extern "C" {
 #endif
 
-// The screen's light and the board's sleep.
-// - Dark after SLEEP_AFTER_MS (2 min) without a touch, unless "Stay on" is set or a job is working or
-//   waiting for you; a touch brings it back at the brightness it had. That touch only wakes it: it
-//   doesn't land on what's under the finger. While dark, LVGL draws nothing.
-// - The PC away (no message for a while: suspended, shut down, unplugged): dark, and the board itself
-//   sleeps in short naps (main.cpp's loop), waking on serial data or a touch. A touch lights it for
-//   SLEEP_AFTER_MS, as a desk clock; the PC's next whole message brings it back for good.
+// What the screen shows and how bright, 24/7. Never dark, and the LCD always refreshed:
+// - the cards (at the slider's brightness) while someone looks: a touch in the last 2 min, a job
+//   working or waiting, or "Stay on";
+// - else the clock face (ui/clock_face.c), dimmed to half the slider's brightness, and always while
+//   the PC is away (no message for a while: suspended, shut down, unplugged). A touch on it brings the
+//   cards back for 2 min.
+// The brightness and "Stay on" are saved (app/settings.cpp) and come back after a restart.
 
-// After screen_main_create(): makes the invisible catcher of the waking touch and starts the timer.
+// After screen_main_create(): the saved brightness and "Stay on" back, and the timer started.
 void screen_power_init(void);
 
-// The brightness slider's value (0..100): set now if lit, and kept to come back to.
+// The brightness slider's value (0..100): set now, and saved once the slider is still.
 void screen_power_set_brightness(int32_t percent);
 
-// "Stay on" in the pull-down panel: no going dark after a while without a touch (but still while the
-// PC is away: a laptop that's suspended or shut down leaves the desk dark).
+// "Stay on" in the pull-down panel: the cards stay (but not while the PC is away), saved.
 void screen_power_set_stay_on(bool on);
 
 // Whether any job is working or waiting for you (serial_link.cpp, from each jobs message). While one
-// is, the screen stays lit; one starting lights a dark screen; once none is, it goes dark
-// SLEEP_AFTER_MS later (if not touched), so you see it done.
+// is, the cards stay; one starting brings them back; once none is, the clock comes 2 min later.
 void screen_power_set_busy(bool on);
 
-// Light up now (an alert came in, the PC is back) / go dark now.
+// The cards now, for 2 min at least (a touch, an alert, the PC back).
 void screen_power_wake(void);
-void screen_power_sleep(void);
 
-// Lit by a touch the board noticed while napping: lit, and that touch is kept from the screen.
-void screen_power_wake_by_touch(void);
-
-// The PC is there (a whole message came in after a while without) or away (none for a while, or it
-// said it suspends).
+// The PC is there (a message came in after a while without) or away (none for a while, or it said
+// it suspends): away, the clock face.
 void screen_power_pc_present(bool present);
-
-// For main.cpp's loop: whether the board should nap now (dark, PC away, not listening), and that
-// serial data woke it (stay up a while, so the PC's next message comes in whole).
-bool screen_power_napping(void);
-void screen_power_heard_serial(void);
 
 #ifdef __cplusplus
 } /*extern "C"*/

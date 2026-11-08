@@ -20,7 +20,7 @@ void header_pc_create(lv_obj_t *parent) {
     pc_text = make_label(pc_pill, &lv_font_montserrat_14, COLOR_DONE, "");
     lv_obj_align(pc_text, LV_ALIGN_CENTER, 0, 0);
 
-    // At start the PC is taken to be there (it powers the board); serial_link.cpp says "PC offline"
-    // after 60 s without a message from it.
-    header_pc_set_online(true);
+    // "PC offline" till its first message (serial_link.cpp says "PC connected" then, and "PC offline"
+    // again after 60 s without one).
+    header_pc_set_online(false);
 }

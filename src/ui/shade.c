@@ -1,7 +1,6 @@
 #include "shade.h"
 #include "card_brightness.h"
-#include "card_jobs.h"
-#include "weather_icon.h"
+#include "motion.h"
 #include "theme.h"
 #include "ui_common.h"
 
@@ -43,8 +42,7 @@ static int32_t finger_y(void) {
 // (the weather icon, the waiting tile's border) holds still meanwhile: drawn again and again under the
 // dimming, it showed through undimmed.
 static void come_down(void) {
-    weather_icon_freeze(true);
-    card_jobs_freeze(true);
+    motion_hold(MOTION_SHADE, true);
     lv_obj_remove_flag(scrim, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(panel, LV_OBJ_FLAG_HIDDEN);
 }
@@ -56,8 +54,7 @@ static void settled(lv_anim_t *a) {
     if (!is_open) {
         lv_obj_add_flag(scrim, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
-        weather_icon_freeze(false);
-        card_jobs_freeze(false);
+        motion_hold(MOTION_SHADE, false); // (still held while the clock face shows)
     }
 }
 
@@ -139,8 +136,17 @@ static void scrim_pressed(lv_event_t *e) {
 }
 
 static stay_on_cb_t on_stay = NULL;
+static lv_obj_t *stay;
 
 void shade_set_stay_on_callback(stay_on_cb_t cb) { on_stay = cb; }
+
+void shade_set_stay_on(bool on) {
+    if (!stay) return;
+    if (on)
+        lv_obj_add_state(stay, LV_STATE_CHECKED);
+    else
+        lv_obj_remove_state(stay, LV_STATE_CHECKED);
+}
 
 static void stay_changed(lv_event_t *e) {
     bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
@@ -208,7 +214,7 @@ void shade_create(void) {
     // 100% reaches 14 px past the slider's end: this leaves a gap; 24 px from the screen's edge), a
     // toggle: on, the screen doesn't go dark after a while without a touch. Off: screen colour, muted
     // text; on: text colour, screen-colour text.
-    lv_obj_t *stay = lv_button_create(panel);
+    stay = lv_button_create(panel);
     lv_obj_set_size(stay, 140, 44);
     lv_obj_align(stay, LV_ALIGN_RIGHT_MID, 16, 0);
     lv_obj_add_flag(stay, LV_OBJ_FLAG_CHECKABLE);

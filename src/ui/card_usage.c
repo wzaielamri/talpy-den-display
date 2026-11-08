@@ -16,6 +16,8 @@ typedef struct {
 } usage_row_t;
 
 static lv_obj_t *use_title;
+static lv_obj_t *use_heads[2]; // "5h", "7d"
+static lv_obj_t *use_empty;    // "Waiting for the PC", then "No accounts" while there are none
 static usage_row_t rows[USAGE_ROWS];
 
 // Spec: each window's column starts at this x: its bar (36 x 6), then its % (42 wide, right-aligned:
@@ -99,6 +101,19 @@ static void show_window(usage_row_t *r, int c, int pct, time_t resets) {
 
 void card_usage_set(const usage_account_t *accounts, int n) {
     if (!use_title) return; // card not created yet
+    bool any = accounts && n > 0;
+    for (int c = 0; c < 2; c++) {
+        if (any)
+            lv_obj_remove_flag(use_heads[c], LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(use_heads[c], LV_OBJ_FLAG_HIDDEN);
+    }
+    if (any) {
+        lv_obj_add_flag(use_empty, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_label_set_text(use_empty, "No accounts");
+        lv_obj_remove_flag(use_empty, LV_OBJ_FLAG_HIDDEN);
+    }
     for (int i = 0; i < USAGE_ROWS; i++) {
         usage_row_t *r = &rows[i];
         lv_obj_t *parts[] = {r->name, r->plan, r->bar[0], r->pct[0], r->resets[0], r->bar[1], r->pct[1], r->resets[1]};
@@ -123,19 +138,17 @@ void card_usage_create(lv_obj_t *parent) {
 
     // The windows' names over their columns, in the title's line.
     for (int c = 0; c < 2; c++) {
-        lv_obj_t *head = make_label(parent, &lv_font_montserrat_14, COLOR_DIM, COL_HEAD[c]);
-        lv_obj_set_pos(head, COL_X[c], 0);
+        use_heads[c] = make_label(parent, &lv_font_montserrat_14, COLOR_DIM, COL_HEAD[c]);
+        lv_obj_set_pos(use_heads[c], COL_X[c], 0);
     }
 
     for (int i = 0; i < USAGE_ROWS; i++)
         rows[i] = make_row(parent, i);
 
-    // Made-up values from the design page until your sync.py sends real ones (no resets while the
-    // clock isn't set: they'd be made up too).
-    time_t now = time(NULL);
-    const usage_account_t example[] = {
-        {"personal", "Pro",  40, 84,  now + 3 * 3600, now + 4 * 86400},
-        {"work",     "Team", 12, 100, now + 2 * 3600, now + 86400 + 3600},
-    };
-    card_usage_set(example, 2);
+    // Spec: use_empty, where the first account's line goes. Until the PC's first usage message:
+    // nothing made up, the card says it waits.
+    use_empty = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "");
+    lv_obj_set_pos(use_empty, 0, 26);
+    card_usage_set(NULL, 0);
+    lv_label_set_text(use_empty, "Waiting for the PC");
 }
