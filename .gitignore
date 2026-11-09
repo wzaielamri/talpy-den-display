@@ -13,3 +13,4 @@ __pycache__/
 
 # 3D-print files: kept locally (the stand model's license forbids sharing them)
 *.stl
+*.gcode
