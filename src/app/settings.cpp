@@ -1,5 +1,6 @@
 #include "settings.h"
 #include <Preferences.h>
+#include <stdio.h>
 
 #define NAMESPACE "desk"
 
@@ -19,6 +20,14 @@ bool settings_stay_on(void) {
     return on;
 }
 
+void settings_tz(char *out, size_t size) {
+    Preferences prefs;
+    prefs.begin(NAMESPACE, false);
+    String tz = prefs.getString("tz", "UTC0");
+    prefs.end();
+    snprintf(out, size, "%s", tz.c_str());
+}
+
 void settings_save_brightness(int32_t percent) {
     Preferences prefs;
     prefs.begin(NAMESPACE, false);
@@ -30,5 +39,12 @@ void settings_save_stay_on(bool on) {
     Preferences prefs;
     prefs.begin(NAMESPACE, false);
     if (!prefs.isKey("stay_on") || prefs.getBool("stay_on", false) != on) prefs.putBool("stay_on", on);
+    prefs.end();
+}
+
+void settings_save_tz(const char *tz) {
+    Preferences prefs;
+    prefs.begin(NAMESPACE, false);
+    if (prefs.getString("tz", "") != tz) prefs.putString("tz", tz); // (no flash write for the same)
     prefs.end();
 }

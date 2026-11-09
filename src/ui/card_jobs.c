@@ -1,11 +1,9 @@
 #include "card_jobs.h"
+#include "app/clock.h"
 #include "theme.h"
 #include "ui_common.h"
 #include <stdio.h>
 #include <string.h>
-
-// Before this the board's clock was never set (the same test as clock.c's): no "how long" then.
-#define CLOCK_SET 1700000000
 
 // One count tile: big number on top, caption below.
 typedef struct {

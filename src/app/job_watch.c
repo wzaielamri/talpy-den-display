@@ -5,7 +5,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SEEN_MAX 48 // jobs remembered from one message to the next (more are left out: no alerts)
+#define SEEN_MAX 64 // jobs remembered from one message to the next (sync.py's MAX_JOBS); more are left out: no alerts
 #define ID_MAX   96
 
 typedef struct {
@@ -60,6 +60,7 @@ void job_watch_update(const job_info_t *jobs, int n) {
     bool alerted_still_waits = false;
     char id[ID_MAX];
 
+    if (n > SEEN_MAX) n = SEEN_MAX; // (one past what's remembered would look new in every message)
     for (int i = 0; i < n; i++) {
         const job_info_t *j = &jobs[i];
         job_key(j, id, sizeof id);

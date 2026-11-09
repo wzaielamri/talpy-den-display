@@ -1,4 +1,5 @@
 #include "clock_face.h"
+#include "app/clock.h"
 #include "theme.h"
 #include "ui_common.h"
 #include "weather_icon.h"
@@ -7,8 +8,7 @@
 
 LV_FONT_DECLARE(font_clock_128); // tools/make_clock_font.py: Montserrat Medium 128 px, digits and ":" only
 
-#define CLOCK_SET 1700000000 // before this the board's clock was never set (as clock.c): "--:--"
-#define SHIFTS    8
+#define SHIFTS 8
 
 // Spec: where the face's content sits, one spot a minute around the middle (within 6 px), so no pixel
 // shows the same thing for hours (some LCDs keep a faint ghost of a picture held that long).

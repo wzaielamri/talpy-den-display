@@ -2,23 +2,27 @@
 """Feed the desk display over USB serial: Talpy Den's jobs and plan usage, the time, the weather.
 
     python3 host/sync.py                        # feed the board, with ~/.config/desk-display.env's place
-    python3 host/sync.py --lat 0 --lon 0        # another place for this run
+    python3 host/sync.py --lat LAT --lon LON    # another place for this run
     python3 host/sync.py --port /dev/ttyUSB1    # another port
     python3 host/sync.py --dry-run              # print the messages, send nothing
     python3 host/sync.py --demo                 # send made-up examples once, to try the board
 
-Your place stays out of the repository, in ~/.config/desk-display.env (the systemd service reads it too):
+Your place stays out of the repository, in ~/.config/desk-display.env (the systemd service reads it too);
+left empty, there is no weather:
 
-    DESK_LAT=0
-    DESK_LON=0
+    DESK_LAT=
+    DESK_LON=
     DESK_PORT=/dev/ttyUSB0    (optional: by default /dev/desk-display if the udev rule made it, else this)
 
 Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
 - jobs and usage: from $XDG_RUNTIME_DIR/talpy-den/jobs.json, which Talpy Den writes whenever a chat's
   state or an account's usage changes; this script waits for that file with inotify (no polling) and
-  sends only what changed. The board makes its alerts from the jobs itself (job_watch.c).
+  sends only what changed. The board makes its alerts from the jobs itself (job_watch.c). A jobs message
+  holds at most MAX_JOBS jobs and MAX_LINE bytes (the board drops a longer line whole): with more, the
+  done ones go first, then the working ones.
 - time: at the start and every 10 minutes (the board keeps it in its RTC).
-- weather and hourly: from Open-Meteo every 15 minutes, for --lat/--lon (none without them).
+- weather and hourly: from Open-Meteo every 15 minutes, for --lat/--lon (none without them), fetched on
+  a thread of its own so that a slow network can't hold up the rest.
 - ping: when nothing else went out for 10 s: the board takes the PC for away after 60 s of silence.
 When the board restarts (it prints "Setup done") or the port comes back, everything is sent again.
 
@@ -29,9 +33,11 @@ import ctypes
 import ctypes.util
 import json
 import os
+import queue
 import select
 import struct
 import sys
+import threading
 import time
 import unicodedata
 import urllib.request
@@ -43,6 +49,10 @@ TIME_EVERY = 600     # s between time messages
 WEATHER_EVERY = 900  # s between weather fetches
 PING_EVERY = 10      # s of silence before a ping
 USAGE_ROWS = 2       # accounts the board's usage card has room for
+MAX_LINE = 8000      # bytes of a jobs message: the board drops a longer line whole (SERIAL_LINE_MAX, serial_link.cpp)
+MAX_JOBS = 64        # jobs in a jobs message: what the board follows for its alerts (SEEN_MAX, job_watch.c)
+NAME_MAX = 40        # characters of a job's name (the card shows about 20)
+JOBS_VERSION = 1     # the jobs file's "version" this script reads
 OPEN_METEO = ("https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
               "&current=temperature_2m,weather_code,is_day"
               "&hourly=temperature_2m,weather_code,is_day,precipitation_probability"
@@ -143,9 +153,30 @@ class FolderWatch:
         return found
 
 
+# Letters that don't split into a letter and an accent, which the NFKD below would lose: spelled out.
+SPELLED = str.maketrans({"ß": "ss", "ẞ": "SS", "Æ": "AE", "æ": "ae", "Œ": "OE", "œ": "oe", "Ø": "O", "ø": "o",
+                         "Đ": "D", "đ": "d", "Ð": "D", "ð": "d", "Þ": "Th", "þ": "th", "Ł": "L", "ł": "l",
+                         "ı": "i", "Ħ": "H", "ħ": "h"})
+
+warned = set()
+
+
+def warn_once(message):
+    """Print message the first time only: the same trouble in every update would fill the journal."""
+    if message not in warned:
+        warned.add(message)
+        print(message)
+
+
+def number(value):
+    """value if it is a number (a JSON true or false is not), else None."""
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
 def plain(text):
-    """What the board's fonts can show: printable ASCII, accents dropped ("Übersicht" -> "Ubersicht")."""
-    text = unicodedata.normalize("NFKD", str(text or ""))
+    """What the board's fonts can show: printable ASCII ("Übersicht" -> "Ubersicht", "Straße" -> "Strasse").
+    Letters of other scripts have no ASCII spelling here, so they go."""
+    text = unicodedata.normalize("NFKD", str(text or "").translate(SPELLED))
     return " ".join("".join(c for c in text if 0x20 <= ord(c) < 0x7F).split())  # (no double space where one went)
 
 
@@ -159,19 +190,41 @@ def machine_of(job):
     return f"{host.split(':', 1)[-1]} ({where})"  # podman:web -> web, docker:api@lab -> api@lab
 
 
+URGENCY = {"waiting": 0, "working": 1, "done": 2}
+
+
+def fit_rows(rows):
+    """rows as one message can hold them (MAX_JOBS jobs, MAX_LINE bytes). When there are too many the least
+    urgent go: done ones, then working ones, the later ones first. The card's counts then miss them."""
+    budget = MAX_LINE - 100  # (the message's own type and time)
+    kept = set()
+    for i in sorted(range(len(rows)), key=lambda i: URGENCY[rows[i]["state"]]):
+        budget -= len(json.dumps(rows[i], separators=(",", ":"))) + 1
+        if len(kept) == MAX_JOBS or budget < 0:
+            break
+        kept.add(i)
+    if len(kept) < len(rows):
+        warn_once(f"jobs: {len(rows)} don't fit in one message, the card counts {len(kept)}")
+    return [row for i, row in enumerate(rows) if i in kept]
+
+
 def jobs_rows(data):
     """The jobs message's rows: Talpy Den's idle (its turn is over, the chat open) shows as done."""
     rows = []
     for job in data.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
         state = {"working": "working", "waiting": "waiting", "idle": "done", "done": "done"}.get(job.get("state"))
         if not state:
             continue
-        row = {"id": job.get("id") or "", "name": plain(job.get("name")) or plain(job.get("folder")) or "(unnamed)",
-               "state": state, "machine": plain(machine_of(job))}
-        if isinstance(job.get("since"), (int, float)):
-            row["since"] = int(job["since"] // 1000)
+        name = plain(job.get("name")) or plain(job.get("folder")) or "(unnamed)"
+        row = {"id": str(job.get("id") or ""), "name": name[:NAME_MAX].rstrip(), "state": state,
+               "machine": plain(machine_of(job))}
+        since = number(job.get("since"))
+        if since is not None:
+            row["since"] = int(since // 1000)
         rows.append(row)
-    return rows
+    return fit_rows(rows)
 
 
 def usage_accounts(data):
@@ -179,25 +232,38 @@ def usage_accounts(data):
     computer's numbers first (the freshest), up to the card's room."""
     chosen = {}
     for acc in data.get("accounts") or []:
-        if acc.get("id") not in chosen or not acc.get("host"):
+        if isinstance(acc, dict) and (acc.get("id") not in chosen or not acc.get("host")):
             chosen[acc.get("id")] = acc
     out = []
     for acc in sorted(chosen.values(), key=lambda a: bool(a.get("host")))[:USAGE_ROWS]:
         row = {"name": plain(acc.get("name")) or "?", "plan": plain(acc.get("plan"))}
         for w in acc.get("windows") or []:
-            if w.get("key") in ("five_hour", "seven_day"):
-                row[w["key"]] = round(w.get("pct") or 0)
-                if w.get("resetsAt"):
-                    row[w["key"] + "_resets"] = int(w["resetsAt"] // 1000)
+            if not isinstance(w, dict) or w.get("key") not in ("five_hour", "seven_day"):
+                continue
+            pct, resets = number(w.get("pct")), number(w.get("resetsAt"))
+            if pct is None:
+                continue  # (the card shows "--" for a window that isn't there)
+            row[w["key"]] = round(pct)
+            if resets:
+                row[w["key"] + "_resets"] = int(resets // 1000)
         out.append(row)
     return out
 
 
 def read_jobs(path):
+    """The jobs file's content; None while there is none (Talpy Den not running), it's being written, or it
+    isn't something this script reads."""
     try:
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
     except (OSError, ValueError):
-        return None  # not there yet (Talpy Den not running), or being written
+        return None
+    if not isinstance(data, dict):
+        warn_once("jobs file: not a JSON object, ignored")
+        return None
+    if data.get("version", JOBS_VERSION) != JOBS_VERSION:  # (a writer that names no version is taken for this one)
+        warn_once(f"jobs file: version {data.get('version')!r}, this sync.py reads {JOBS_VERSION}: ignored")
+        return None
+    return data
 
 
 # ---------- the weather ----------
@@ -238,6 +304,26 @@ def fetch_weather(lat, lon):
     url = OPEN_METEO.format(lat=lat, lon=lon)
     with urllib.request.urlopen(url, timeout=15) as reply:
         return weather_messages(json.load(reply))
+
+
+class WeatherWorker(threading.Thread):
+    """Fetches the weather when asked, on a thread of its own: a slow network (a DNS lookup has no timeout at
+    all) must not hold up the serial loop with its pings and alerts. What it fetched waits in results."""
+
+    def __init__(self, lat, lon):
+        super().__init__(daemon=True)
+        self.lat, self.lon = lat, lon
+        self.asked = threading.Event()
+        self.results = queue.SimpleQueue()
+
+    def run(self):
+        while True:
+            self.asked.wait()
+            self.asked.clear()
+            try:
+                self.results.put(fetch_weather(self.lat, self.lon))
+            except Exception as exc:  # (whatever the network does: this thread must not end)
+                print(f"weather: {exc}; again in {WEATHER_EVERY // 60} min")
 
 
 # ---------- made-up examples (--demo) ----------
@@ -296,8 +382,8 @@ def main():
                                            else "/dev/ttyUSB0")
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--port", default=port)
-    ap.add_argument("--lat", type=float, default=os.environ.get("DESK_LAT"))
-    ap.add_argument("--lon", type=float, default=os.environ.get("DESK_LON"))
+    ap.add_argument("--lat", type=float, default=os.environ.get("DESK_LAT") or None)
+    ap.add_argument("--lon", type=float, default=os.environ.get("DESK_LON") or None)
     ap.add_argument("--dry-run", action="store_true", help="print the messages instead of sending them")
     ap.add_argument("--demo", action="store_true", help="send made-up examples once and stop")
     args = ap.parse_args()
@@ -317,13 +403,22 @@ def main():
     tz = local_tz()
     sent = {}         # type -> the fields last sent (to send jobs and usage only when they change)
     weather = None    # the last (weather, hourly) fetched
+    worker = None     # what fetches it, without holding up the loop
+    if args.lat is not None and args.lon is not None:
+        worker = WeatherWorker(args.lat, args.lon)
+        worker.start()
     next_time = next_weather = 0.0
 
     def send_jobs(force=False):
         data = read_jobs(path)
         if data is None:
             return
-        for type_, fields in (("jobs", {"rows": jobs_rows(data)}), ("usage", {"accounts": usage_accounts(data)})):
+        for type_, key, build in (("jobs", "rows", jobs_rows), ("usage", "accounts", usage_accounts)):
+            try:
+                fields = {key: build(data)}
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:  # (a jobs file of another shape)
+                warn_once(f"{type_}: the jobs file isn't what this sync.py reads ({exc!r}), skipped")
+                continue
             if force or sent.get(type_) != fields:
                 sent[type_] = fields
                 extra = {"updated": time.strftime("%H:%M:%S")} if type_ == "jobs" else {}
@@ -354,14 +449,14 @@ def main():
             if now >= next_time:
                 board.send("time", epoch=int(now), tz=tz)
                 next_time = now + TIME_EVERY
-            if args.lat is not None and args.lon is not None and now >= next_weather:
-                next_weather = now + WEATHER_EVERY
-                try:
-                    weather = fetch_weather(args.lat, args.lon)
+            if worker:
+                if now >= next_weather:
+                    next_weather = now + WEATHER_EVERY
+                    worker.asked.set()
+                while not worker.results.empty():
+                    weather = worker.results.get()
                     board.send("weather", **weather[0])
                     board.send("hourly", **weather[1])
-                except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
-                    print(f"weather: {exc}; again in {WEATHER_EVERY // 60} min")
             if now - board.last_sent >= PING_EVERY:
                 board.send("ping")
         except (serial.SerialException, OSError) as exc:

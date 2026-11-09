@@ -31,7 +31,7 @@ void screen_power_set_busy(bool on);
 void screen_power_wake(void);
 
 // The PC is there (a message came in after a while without) or away (none for a while, or it said
-// it suspends): away, the clock face.
+// it suspends): away, the clock face, and an alert that shows goes.
 void screen_power_pc_present(bool present);
 
 #ifdef __cplusplus

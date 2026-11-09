@@ -1,10 +1,10 @@
 #include "card_usage.h"
+#include "app/clock.h"
 #include "theme.h"
 #include "ui_common.h"
 #include <stdio.h>
 
-#define USAGE_HIGH 80        // from here a window's bar and % turn amber
-#define CLOCK_SET 1700000000 // before this the board's clock was never set (as clock.c): no reset times
+#define USAGE_HIGH 80 // from here a window's bar and % turn amber
 
 // One account: its name and plan, then for each window (5-hour, week) a bar, its % and when it resets.
 typedef struct {

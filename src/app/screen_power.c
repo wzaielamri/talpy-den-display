@@ -2,6 +2,7 @@
 #include "app/settings.h"
 #include "drivers/backlight.h"
 #include "lvgl.h"
+#include "ui/alert.h"
 #include "ui/card_brightness.h"
 #include "ui/card_hourly.h"
 #include "ui/clock_face.h"
@@ -78,10 +79,12 @@ void screen_power_set_busy(bool on) {
 void screen_power_pc_present(bool present) {
     if (present == !pc_away) return;
     pc_away = !present;
-    if (pc_away)
+    if (pc_away) {
+        alert_hide(); // (its job's PC is gone: an alert left up would sit dimmed on the screen all night)
         show_clock(true);
-    else
+    } else {
         screen_power_wake();
+    }
 }
 
 static void tick(lv_timer_t *timer) {

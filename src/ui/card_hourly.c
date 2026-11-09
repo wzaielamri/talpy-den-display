@@ -1,4 +1,5 @@
 #include "card_hourly.h"
+#include "app/clock.h"
 #include "theme.h"
 #include "ui_common.h"
 #include "weather_icon.h"
@@ -11,7 +12,6 @@
 #define COLS_Y       64
 #define RAIN_LIKELY  50       // from here the chance of rain shows in the rain colour
 #define AUTO_HIDE_MS 60000    // no touch for this long: back to the jobs
-#define CLOCK_SET    1700000000 // before this the board's clock was never set (as clock.c)
 
 // One hour's column.
 typedef struct {

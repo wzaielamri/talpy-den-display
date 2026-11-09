@@ -200,8 +200,9 @@ static void handle_line(const char *line) {
     else Serial.printf("unknown type: \"%s\"\n", type);
 }
 
-// A jobs message is about 60 characters per job, so 4096 holds 60+ jobs.
-#define SERIAL_LINE_MAX 4096 // (not LINE_MAX: <limits.h> has one of that name)
+// A jobs message is 100-180 characters per job. sync.py keeps one under 8000 characters and 64 jobs (MAX_LINE and
+// MAX_JOBS there); a longer line is dropped whole.
+#define SERIAL_LINE_MAX 8192 // (not LINE_MAX: <limits.h> has one of that name)
 
 void serial_poll(void) {
     static char line[SERIAL_LINE_MAX];

@@ -5,7 +5,7 @@ extern "C" {
 
 #include "lvgl.h"
 
-// The alert (plan step 9): a box on a screen of its own, for a job. Two kinds:
+// The alert: a box on a screen of its own, for a job. Two kinds:
 // - ALERT_WAITING: a job needs you (amber, a bell). It stays until OK is tapped or alert_hide().
 // - ALERT_DONE: a job finished (green, a check). It goes by itself after 15 s, or with OK.
 // A waiting one comes first: a done one doesn't take its place while it shows.

@@ -50,14 +50,16 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 
 ## Quick start
 
-You need [PlatformIO](https://platformio.org/), Python 3 with pyserial (`sudo dnf install
-python3-pyserial` or `sudo apt install python3-serial`), and access to the serial port (on most
-distributions: `sudo usermod -aG dialout $USER`, then log in again).
+You need [PlatformIO](https://platformio.org/) and Python 3 with pyserial (`sudo dnf install
+python3-pyserial` or `sudo apt install python3-serial`). The first two lines below give the board a
+fixed name, `/dev/desk-display`, and give you access to it: no `dialout` group needed.
 
 ```sh
+sudo cp host/70-desk-display.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=tty   # replug the board if needed
 pio run -t upload                                # build and flash the board
 python3 host/sync.py --demo                      # send made-up examples once: check every screen
-printf 'DESK_LAT=0\nDESK_LON=0\n' > ~/.config/desk-display.env   # then put in your own place
+printf 'DESK_LAT=\nDESK_LON=\n' > ~/.config/desk-display.env   # then put in your latitude and longitude
 python3 host/sync.py --dry-run                   # print what it would send
 python3 host/sync.py                             # the real thing (Ctrl+C to stop)
 ```
@@ -68,14 +70,11 @@ them you get no weather. `--lat` and `--lon` override them for one run. If the b
 
 ## Run it all the time
 
-A udev rule gives the board a fixed name, `/dev/desk-display`, whatever USB port it's in. A systemd
-user service then starts `sync.py` when you log in and restarts it if it stops. It reads the same
-`~/.config/desk-display.env`. Run these from the repository folder:
+With the udev rule from the quick start the board keeps the name `/dev/desk-display`, whatever USB
+port it's in. A systemd user service then starts `sync.py` when you log in and restarts it if it
+stops. It reads the same `~/.config/desk-display.env`. Run these from the repository folder:
 
 ```sh
-sudo cp host/99-desk-display.rules /etc/udev/rules.d/
-sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=tty
-
 mkdir -p ~/.local/bin ~/.config/systemd/user
 ln -sf "$PWD/host/sync.py" ~/.local/bin/desk-display-sync
 cp host/desk-display-sync.service ~/.config/systemd/user/
@@ -96,11 +95,11 @@ one rename. Its format is described in Talpy Den's
 [how it works](https://github.com/wzaielamri/talpy-den/blob/main/docs/how-it-works.md#the-jobs-file).
 To show jobs from another tool, write the same file the same way.
 
-To skip `sync.py`, send the board one JSON object per line at 115200 baud yourself:
+To skip `sync.py`, send the board one JSON object per line (under 8 KB) at 115200 baud yourself:
 
 | `type` | Fields | `sync.py` sends it |
 |---|---|---|
-| `time` | `epoch`, `tz` (POSIX TZ string) | at the start and every 10 min |
+| `time` | `epoch`, `tz` (POSIX TZ string; the board keeps the last one, UTC until the first) | at the start and every 10 min |
 | `jobs` | `rows`: `id`, `name`, `state` (`working`/`waiting`/`done`), `since` (Unix s), `machine` | when they change |
 | `usage` | `accounts`: `name`, `plan`, `five_hour`, `seven_day` (%), `five_hour_resets`, `seven_day_resets` | when they change |
 | `weather` | `temp`, `code` ([WMO](https://open-meteo.com/en/docs)), `day`, `hi`, `lo`, `updated` | every 15 min |
@@ -112,11 +111,16 @@ For example: `{"type":"jobs","rows":[{"id":"1","name":"fix-parser","state":"wait
 The board makes the alerts itself by comparing each `jobs` message with the one before. Each
 handler is documented in [`src/app/serial_link.cpp`](src/app/serial_link.cpp).
 
+## Privacy
+
+- `sync.py` makes one network call: the weather from Open-Meteo, with your latitude and longitude.
+- Chat names go to the board as plain ASCII, and the board's log shows them, so `journalctl` does too.
+
 ## Design
 
 [`design/desk-display-layout.html`](design/desk-display-layout.html) is the layout spec: every card's
 position, size, colour, font and state, with the LVGL calls behind them. Download it and open it in
-a browser. The pictures above are exported from it.
+a browser (it loads its fonts from Google Fonts). The pictures above are exported from it.
 
 The clock's digits are Montserrat Medium at 128 px. LVGL's built-in fonts stop at 48 px, so
 [`tools/make_clock_font.py`](tools/make_clock_font.py) generates `src/ui/font_clock_128.c` (needs
@@ -145,7 +149,8 @@ Built with [LVGL](https://lvgl.io/), [LovyanGFX](https://github.com/lovyan03/Lov
 [ArduinoJson](https://arduinojson.org/) and [pioarduino](https://github.com/pioarduino/platform-espressif32).
 The board setup (pins, panel timings, backlight controller) follows Elecrow's CrowPanel examples. The
 clock digits come from [Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License
-1.1). Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0).
+1.1). Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Claude is a trademark of
+Anthropic, which this project isn't affiliated with.
 
 ## License
 

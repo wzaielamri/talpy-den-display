@@ -23,10 +23,6 @@ void card_weather_create(lv_obj_t *parent);
 // Call from the LVGL loop (loop()/serial handler), never from another task.
 void card_weather_set(const weather_update_t *w);
 
-// Checking aid: shows every weather icon in turn (4 s each) with its condition text.
-// Call once after screen_main_create() in setup(); remove the call when you're done looking.
-void card_weather_demo_start(void);
-
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

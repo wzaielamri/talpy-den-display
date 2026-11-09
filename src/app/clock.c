@@ -1,4 +1,5 @@
 #include "clock.h"
+#include "app/settings.h"
 #include "drivers/rtc.h"
 #include "lvgl.h"
 #include "ui/header_clock.h"
@@ -8,11 +9,11 @@
 #include <sys/time.h>
 #include <time.h>
 
-
+static char zone[64]; // the POSIX time zone in use: the PC's last (kept across restarts), UTC till it has sent one
 
 void clock_init(){
     time_t now;
-    if (rtc_read(&now)) {
+    if (rtc_read(&now)) { // (first: it reads the RTC as UTC, while no zone is set)
         printf("RTC: %lld\n", (long long)now);
         struct timeval tv = {};
         tv.tv_sec = now;
@@ -20,7 +21,8 @@ void clock_init(){
     } else {
         printf("RTC: not set\n");
     }
-    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+    settings_tz(zone, sizeof zone);
+    setenv("TZ", zone, 1);
     tzset();
 
 }
@@ -30,9 +32,11 @@ void clock_sync(long long epoch, const char *tz) {
     tv.tv_sec = epoch;
     settimeofday(&tv, NULL);
     rtc_write((time_t)epoch);
-    if (tz && tz[0]) {
-        setenv("TZ", tz, 1);
+    if (tz && tz[0] && strlen(tz) < sizeof zone && strcmp(tz, zone) != 0) { // (a new zone: kept for the next start)
+        strcpy(zone, tz);
+        setenv("TZ", zone, 1);
         tzset();
+        settings_save_tz(zone);
     }
 }
 
@@ -43,7 +47,7 @@ static void clock_tick(lv_timer_t *timer) {
     char date_str[32];
     char weekday[12], month[12];
     time_t now = time(NULL);
-    if (now < 1700000000) { // clock never set: the labels keep their start text "--:--"
+    if (now < CLOCK_SET) { // clock never set: the labels keep their start text "--:--"
         return;
     }
     struct tm tm;

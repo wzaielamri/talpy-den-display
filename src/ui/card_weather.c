@@ -84,28 +84,3 @@ void card_weather_create(lv_obj_t *parent){
     lv_label_set_text(wx_hilo, LV_SYMBOL_UP " --°   " LV_SYMBOL_DOWN " --°");
     lv_label_set_text(wx_note, "Open-Meteo " LV_SYMBOL_BULLET " --:--");
 }
-
-// ---------- demo: every icon in turn, to check them on the board ----------
-
-typedef struct {
-    int code;
-    bool day;
-} wx_demo_t;
-
-static const wx_demo_t demo[] = {
-    {0, true},  {0, false}, {2, true},  {2, false}, {3, true},
-    {45, true}, {53, true}, {63, true}, {73, true}, {95, true},
-};
-
-static void demo_tick(lv_timer_t *timer) {
-    LV_UNUSED(timer);
-    static unsigned i = 0;
-    weather_icon_set(demo[i].code, demo[i].day);
-    lv_label_set_text(wx_cond, wmo_text(demo[i].code));
-    i = (i + 1) % (sizeof demo / sizeof demo[0]);
-}
-
-void card_weather_demo_start(void) {
-    lv_timer_create(demo_tick, 4000, NULL);
-    demo_tick(NULL);
-}

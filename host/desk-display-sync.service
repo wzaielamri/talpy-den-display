@@ -4,13 +4,13 @@
 #
 #   mkdir -p ~/.local/bin ~/.config/systemd/user
 #   ln -sf "$PWD/host/sync.py" ~/.local/bin/desk-display-sync
-#   printf 'DESK_LAT=0\nDESK_LON=0\n' > ~/.config/desk-display.env    # then put in your own place
+#   printf 'DESK_LAT=\nDESK_LON=\n' > ~/.config/desk-display.env    # then put in your latitude and longitude
 #   cp host/desk-display-sync.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now desk-display-sync
 #   journalctl --user -u desk-display-sync -f            # what it sends and what the board says
 #
-# Without the udev rule (99-desk-display.rules), add DESK_PORT=/dev/ttyUSB0 to that env file.
+# Without the udev rule (70-desk-display.rules), add DESK_PORT=/dev/ttyUSB0 to that env file.
 # sync.py reads that file too when you run it by hand, so the place is the same either way.
 # Flashing the board needs its port: systemctl --user stop desk-display-sync, pio run -t upload, start.
 [Unit]
