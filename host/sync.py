@@ -5,6 +5,7 @@
     python3 host/sync.py --lat LAT --lon LON    # another place for this run
     python3 host/sync.py --port /dev/ttyUSB1    # another port
     python3 host/sync.py --dry-run              # print the messages, send nothing
+    python3 host/sync.py --debug                # send them and print them too
     python3 host/sync.py --demo                 # send made-up examples once, to try the board
 
 Your place stays out of the repository, in ~/.config/desk-display.env (the systemd service reads it too);
@@ -13,6 +14,7 @@ left empty, there is no weather:
     DESK_LAT=
     DESK_LON=
     DESK_PORT=/dev/ttyUSB0    (optional: by default /dev/desk-display if the udev rule made it, else this)
+    DESK_DEBUG=1              (optional: as --debug, also for the service)
 
 Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
 - jobs and usage: from $XDG_RUNTIME_DIR/talpy-den/jobs.json, which Talpy Den writes whenever a chat's
@@ -25,6 +27,8 @@ Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
   a thread of its own so that a slow network can't hold up the rest.
 - ping: when nothing else went out for 10 s: the board takes the PC for away after 60 s of silence.
 When the board restarts (it prints "Setup done") or the port comes back, everything is sent again.
+What the board prints goes to this script's output (the journal, for the service): its errors and
+"PC back/away", and with DESK_DEBUG 1 in platformio.ini every message it got as well.
 
 Needs pyserial; the rest is Python's own.
 """
@@ -65,8 +69,8 @@ OPEN_METEO = ("https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={
 class Board:
     """The serial port, opened again when it goes; or, dry, the terminal."""
 
-    def __init__(self, port, dry):
-        self.port, self.dry, self.ser, self.last_sent = port, dry, None, 0.0
+    def __init__(self, port, dry, debug=False):
+        self.port, self.dry, self.debug, self.ser, self.last_sent = port, dry, debug, None, 0.0
 
     def connect(self):
         """Open the port (waiting till it's there); True once open."""
@@ -94,8 +98,9 @@ class Board:
     def send(self, type_, **fields):
         line = json.dumps({"type": type_, **fields}, separators=(",", ":"))  # (ASCII: \u escapes)
         self.last_sent = time.time()
-        if self.dry:
+        if self.dry or self.debug:
             print("->", line[:200] + ("..." if len(line) > 200 else ""))
+        if self.dry:
             return
         self.ser.write((line + "\n").encode())
 
@@ -385,10 +390,12 @@ def main():
     ap.add_argument("--lat", type=float, default=os.environ.get("DESK_LAT") or None)
     ap.add_argument("--lon", type=float, default=os.environ.get("DESK_LON") or None)
     ap.add_argument("--dry-run", action="store_true", help="print the messages instead of sending them")
+    ap.add_argument("--debug", action="store_true", default=os.environ.get("DESK_DEBUG") == "1",
+                    help="print every message sent (off by default: a ping every 10 s fills the journal)")
     ap.add_argument("--demo", action="store_true", help="send made-up examples once and stop")
     args = ap.parse_args()
 
-    board = Board(args.port, args.dry_run)
+    board = Board(args.port, args.dry_run, args.debug)
     board.connect()
     if args.demo:
         demo(board)

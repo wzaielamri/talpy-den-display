@@ -24,8 +24,8 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
   it says how many more there are. The waiting tile pulses.
 - **Alerts:** a full-screen alert when a chat starts waiting for you (stays until you tap OK), and a
   shorter one when a chat finishes (15 s).
-- **Plan usage:** the 5-hour and 7-day windows of up to two accounts, with their reset times. A bar
-  turns amber from 80%.
+- **Plan usage:** the 5-hour and 7-day windows of up to two accounts, with their reset times. As in
+  Talpy Den, a bar is green, orange from 70% and red from 90%.
 - **Weather:** now, today's high and low, and the next 8 hours with rain chances, from
   [Open-Meteo](https://open-meteo.com/) (no API key needed).
 - **Brightness:** swipe down from the top for the brightness slider and a **Stay on** toggle. The
@@ -33,7 +33,8 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 - **Clock face:** after 2 minutes without a touch, the screen switches to a big clock at half
   brightness. It doesn't switch while a chat is working or waiting, or while Stay on is set. It also
   shows the clock while the PC is away (no message for 60 s), so a board on a powered hub can stay on
-  day and night. The clock moves a few pixels each minute so nothing burns in. Touch it to come back.
+  day and night. The clock moves a few pixels each minute so nothing burns in. Double-tap the screen
+  (anywhere but the weather card) to show it right away. Touch it to come back.
 
 ## Hardware
 
@@ -83,6 +84,10 @@ systemctl --user enable --now desk-display-sync
 
 journalctl --user -u desk-display-sync -f        # what it sends, what the board answers
 ```
+
+The log stays short: what the board reports (its errors, and when the PC comes and goes). For
+more, `python3 host/sync.py --debug` (or `DESK_DEBUG=1` in the env file) also logs every message it
+sends, and building the board with `-D DESK_DEBUG=1` in `platformio.ini` makes it echo each one it gets.
 
 The service holds the serial port. To flash, stop it first:
 `systemctl --user stop desk-display-sync && pio run -t upload && systemctl --user start desk-display-sync`.

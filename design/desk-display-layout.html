@@ -215,8 +215,9 @@ const C = {
   muted:  { hex: "8C96A3", name: "Muted", use: "titles, date, captions" },
   dim:    { hex: "5D6672", name: "Dim", use: "times, sources" },
   work:   { hex: "4C9BFF", name: "Working", use: "jobs at work" },
-  wait:   { hex: "FFB547", name: "Waiting", use: "jobs that need you, alert" },
-  done:   { hex: "3DD68C", name: "Done", use: "finished jobs, PC connected" },
+  wait:   { hex: "FFB547", name: "Waiting", use: "jobs that need you, alert, usage from 70%" },
+  done:   { hex: "3DD68C", name: "Done", use: "finished jobs, PC connected, usage under 70%" },
+  limit:  { hex: "FF6B6B", name: "Limit", use: "usage at 90% and more" },
   pcbg:   { hex: "13281D", name: "PC pill", use: "PC connected background" },
   waitbg: { hex: "3A2C12", name: "Alert badge", use: "bell circle background" },
   sun:    { hex: "FFCF5A", name: "Sun", use: "weather picture" },
@@ -294,7 +295,7 @@ el({ s: "main", id: "pc_text", widget: "label", parent: "pc_pill", text: "{USB} 
      d: { cx: 700, cy: 40 }, place: "CENTER 0, 0", size: "auto", note: "LV_SYMBOL_USB \" PC connected\"" });
 el({ s: "main", id: "pull_zone", widget: "obj", parent: "lv_layer_top()", d: { x: 0, y: 0, w: 800, h: 72 },
      place: "TOP_LEFT 0, 0", size: "800 × 72",
-     note: "Invisible (lv_obj_remove_style_all), clickable, no scrolling or scroll chain. A pull down from here (LV_EVENT_PRESSING, once the finger has moved 6 px) dims the screen and brings the panel with the finger, its bottom edge 16 px under it; let go past a third of the way and it opens, else it goes back up. Touch and drawing run every 16 ms (LV_DEF_REFR_PERIOD in lv_conf.h). Nothing under it takes taps." });
+     note: "Invisible (lv_obj_remove_style_all), clickable, no scrolling or scroll chain. A pull down from here (LV_EVENT_PRESSING, once the finger has moved 6 px) dims the screen and brings the panel with the finger, its bottom edge 16 px under it; let go past a third of the way and it opens, else it goes back up. Touch and drawing run every 16 ms (LV_DEF_REFR_PERIOD in lv_conf.h). Nothing under it takes taps; a double tap on it shows the clock face, as on the screen. Hidden (with its pill) while the clock face shows (shade_allow), so a touch anywhere on the clock brings the cards back." });
 el({ s: "main", id: "pull_hint", widget: "obj", parent: "pull_zone", d: { x: 380, y: 6, w: 40, h: 4 },
      style: { background: col("line"), borderRadius: "2px" }, place: "TOP_MID 0, 6", size: "40 × 4", color: "line",
      note: "Radius LV_RADIUS_CIRCLE, not clickable: says something pulls down from there." });
@@ -321,7 +322,7 @@ el({ s: "main", id: "wx_icon", widget: "obj", parent: "card_wx", d: { x: 176, y:
 
 el({ s: "main", group: "Usage card" });
 el({ s: "main", id: "card_use", widget: "obj", parent: "screen", card: true, d: { x: 16, y: 324, w: 280, h: 140 },
-     place: "TOP_LEFT 16, 324", size: "280 × 140", color: "card", note: "Card style. Inner area 240 × 100. Brightness moved to the pull-down panel. Till the PC's first usage message: no column heads, and “Waiting for the PC” (use_empty: montserrat_14, muted, at 0, 26); “No accounts” when a message lists none." });
+     place: "TOP_LEFT 16, 324", size: "280 × 140", color: "card", note: "Card style. Inner area 240 × 100. Not clickable: a tap goes through to the screen (double tap: the clock face). Brightness moved to the pull-down panel. Till the PC's first usage message: no column heads, and “Waiting for the PC” (use_empty: montserrat_14, muted, at 0, 26); “No accounts” when a message lists none." });
 el({ s: "main", id: "use_title", widget: "label", parent: "card_use", text: "USAGE", font: 14, color: "muted", ls: 1,
      d: { x: 36, y: 344 }, place: "TOP_LEFT 0, 0", size: "auto", note: "text_letter_space 1" });
 el({ s: "main", id: "use_head_5h", widget: "label", parent: "card_use", text: "5h", font: 14, color: "dim",
@@ -331,7 +332,7 @@ el({ s: "main", id: "use_head_7d", widget: "label", parent: "card_use", text: "7
 const usage = [{ name: "personal", plan: "Pro", h5: 40, d7: 84, r5: "18:00", r7: "Tue" },
                { name: "work", plan: "Team", h5: 12, d7: 100, r5: "17:00", r7: "Mon" }];
 usage.forEach((u, i) => {
-  const y = 370 + 40 * i, iy = 26 + 40 * i, first = i === 0, tag = first ? "" : "_" + (i + 1), lvl = p => (p >= 80 ? "wait" : "work");
+  const y = 370 + 40 * i, iy = 26 + 40 * i, first = i === 0, tag = first ? "" : "_" + (i + 1), lvl = p => (p >= 90 ? "limit" : p >= 70 ? "wait" : "done");
   el({ s: "main", id: "use_name" + tag, widget: "label", parent: "card_use", spec: first, text: u.name, font: 14, color: "text", cut: true,
        d: { x: 36, y, w: 64 }, place: "TOP_LEFT 0, " + iy, size: "64 × 16",
        note: "The account. LV_LABEL_LONG_DOT. Account 2: y 66. Room for 2 accounts; the PC picks which come first." });
@@ -340,10 +341,10 @@ usage.forEach((u, i) => {
   [["5h", u.h5, u.r5, 108, 188], ["7d", u.d7, u.r7, 196, 276]].forEach(([w, p, r, bx, pr], c) => {
     el({ s: "main", id: "use_bar_" + w + tag, widget: "bar", parent: "card_use", spec: first, value: p, track: "tile", fill: lvl(p),
          d: { x: bx, y: y + 5, w: 36, h: 6 }, place: "TOP_LEFT " + (72 + 88 * c) + ", " + (iy + 5), size: "36 × 6", color: lvl(p),
-         note: "lv_bar 0–100, no padding (lv_obj_remove_style_all). MAIN: tile. INDICATOR: working colour, waiting colour from 80%. Both radius 3." });
-    el({ s: "main", id: "use_pct_" + w + tag, widget: "label", parent: "card_use", spec: first, text: p + "%", font: 14, color: p >= 80 ? "wait" : "text",
+         note: "lv_bar 0–100, no padding (lv_obj_remove_style_all), not clickable. MAIN: tile. INDICATOR as in Talpy Den: done (green), waiting (orange) from 70%, limit (red) from 90%. Both radius 3." });
+    el({ s: "main", id: "use_pct_" + w + tag, widget: "label", parent: "card_use", spec: first, text: p + "%", font: 14, color: p >= 70 ? lvl(p) : "text",
          d: { r: pr, y }, place: "TOP_LEFT " + (110 + 88 * c) + ", " + iy, size: "42 × 16",
-         note: "Text align right; 42 wide, as “100%” takes ~38 px and a narrower label wraps the “%” onto a line of its own. Waiting colour from 80%. “--” in muted while the PC hasn't said." });
+         note: "Text align right; 42 wide, as “100%” takes ~38 px and a narrower label wraps the “%” onto a line of its own. Text colour under 70%, else its bar's colour (orange, red from 90%). “--” in muted while the PC hasn't said." });
     el({ s: "main", id: "use_reset_" + w + tag, widget: "label", parent: "card_use", spec: first, text: "{REFRESH} " + r, font: 14, color: "dim", cut: true,
          d: { x: bx, y: y + 18, w: 80 }, place: "TOP_LEFT " + (72 + 88 * c) + ", " + (iy + 18), size: "80 × 16",
          note: "When the window starts again: LV_SYMBOL_REFRESH and its time if that's within a day, else its day (“Tue”). Nothing while not known." });
@@ -352,7 +353,7 @@ usage.forEach((u, i) => {
 
 el({ s: "main", group: "Jobs card" });
 el({ s: "main", id: "card_jobs", widget: "obj", parent: "screen", card: true, d: { x: 312, y: 88, w: 472, h: 376 },
-     place: "TOP_LEFT 312, 88", size: "472 × 376", color: "card", note: "Card style. Inner area 432 × 336. Till the PC's first jobs message: 0 0 0, no rows, and “Waiting for the PC” (jb_empty: montserrat_14, muted, TOP_MID 0, 212); “No jobs right now” when a message lists none." });
+     place: "TOP_LEFT 312, 88", size: "472 × 376", color: "card", note: "Card style. Inner area 432 × 336. Not clickable, nor its rows: a tap goes through to the screen (double tap: the clock face). Till the PC's first jobs message: 0 0 0, no rows, and “Waiting for the PC” (jb_empty: montserrat_14, muted, TOP_MID 0, 212); “No jobs right now” when a message lists none." });
 el({ s: "main", id: "jb_title", widget: "label", parent: "card_jobs", text: "CLAUDE JOBS", font: 14, color: "muted", ls: 1,
      d: { x: 332, y: 108 }, place: "TOP_LEFT 0, 0", size: "auto" });
 el({ s: "main", id: "jb_updated", widget: "label", parent: "card_jobs", text: "updated 14:52:05", font: 14, color: "dim",
@@ -481,7 +482,7 @@ el({ s: "shade", id: "shade_handle", widget: "obj", parent: "shade", d: { x: 380
 el({ s: "clock", group: "Clock face, over everything on the main screen (made last)" });
 el({ s: "clock", id: "clock_face", widget: "obj", parent: "screen", d: { x: 0, y: 0, w: 800, h: 480 },
      style: { background: col("bg") }, place: "TOP_LEFT 0, 0", size: "lv_pct(100) × lv_pct(100)", color: "bg",
-     note: "Screen colour, opaque, clickable: a touch (LV_EVENT_PRESSED) brings the cards back and doesn't reach them. Hidden till screen_power.c shows it: after 2 min without a touch (no job working or waiting, no Stay on), and while the PC is away. The backlight then at half the slider's brightness (CLOCK_DIM 50)." });
+     note: "Screen colour, opaque, clickable: a touch (LV_EVENT_PRESSED) brings the cards back and doesn't reach them. Hidden till screen_power.c shows it: after 2 min without a touch (no job working or waiting, no Stay on), while the PC is away, and at once on a double tap (two taps within 500 ms) on the screen, the usage or jobs card or the header (ui/double_tap.c; the weather card keeps its tap). It stays till a touch, a job starting or an alert. The backlight then at half the slider's brightness (CLOCK_DIM 50)." });
 el({ s: "clock", id: "clock_content", widget: "obj", parent: "clock_face", d: { x: 220, y: 124, w: 360, h: 231 },
      place: "CENTER, moved each minute", size: "LV_SIZE_CONTENT",
      note: "Flex column, centred, 16 px apart, no background. Each minute to the next of 8 spots around the middle, within 6 px (SHIFT in clock_face.c), so no pixel shows the same thing for hours." });
@@ -674,7 +675,7 @@ const MODES = {
   },
   clock: {
     btn: "btn-clock", hash: "clock", title: "Every element: clock face (over the whole main screen)",
-    caption: "What the screen shows when nobody looks: after 2 min without a touch (no job working or waiting, no Stay on), and always while the PC is away (as here, with “PC offline”). Half the slider's brightness and nothing moving; the time is drawn again once a minute and everything moves a few pixels each minute, so no picture stays put on the LCD for hours. A touch brings the cards back."
+    caption: "What the screen shows when nobody looks: after 2 min without a touch (no job working or waiting, no Stay on), and always while the PC is away (as here, with “PC offline”). Half the slider's brightness and nothing moving; the time is drawn again once a minute and everything moves a few pixels each minute, so no picture stays put on the LCD for hours. A double tap on the cards brings it at once; a touch brings the cards back."
   },
   done: {
     btn: "btn-done", hash: "done", title: "Every element: alert, a job finished (the same box, in green)",

@@ -11,6 +11,7 @@
 #define COLOR_DIM     0x5D6672
 #define COLOR_WORKING 0x4C9BFF
 #define COLOR_DONE    0x3DD68C
+#define COLOR_LIMIT   0xFF6B6B // a usage window at 90% or more: close to its limit
 #define COLOR_PC      0x13281D
 #define COLOR_ALERT   0x3A2C12
 #define COLOR_SUN     0xFFCF5A

@@ -1,5 +1,6 @@
 #include "shade.h"
 #include "card_brightness.h"
+#include "double_tap.h"
 #include "motion.h"
 #include "theme.h"
 #include "ui_common.h"
@@ -83,10 +84,22 @@ void shade_close(void) {
     if (panel && is_open) glide(false);
 }
 
+void shade_allow(bool allowed) {
+    if (!zone) return;
+    if (allowed) {
+        lv_obj_remove_flag(zone, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(zone, LV_OBJ_FLAG_HIDDEN);
+        dragging = false; // (a pull under way stops here: its finger's next moves are ignored)
+        if (!lv_obj_has_flag(panel, LV_OBJ_FLAG_HIDDEN)) glide(false); // open, or part way down
+    }
+}
+
 // A pull down from the header: the screen dims as the pull starts, and the panel's bottom edge follows
 // the finger; let go past a third of the way and it opens, else it goes back up.
 static void zone_event(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
+    if (lv_obj_has_flag(zone, LV_OBJ_FLAG_HIDDEN)) return; // (shade_allow(false) during a pull: LVGL still sends it the rest)
     if (code == LV_EVENT_PRESSED) {
         press_y = finger_y();
         dragging = false;
@@ -170,6 +183,7 @@ void shade_create(void) {
     // (no scrolling, here or passed on: the drag is the panel's)
     lv_obj_remove_flag(zone, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_CHAIN | LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(zone, zone_event, LV_EVENT_ALL, NULL);
+    double_tap_watch(zone); // (the header is part of the screen for a double tap: the clock face)
     lv_obj_t *hint = make_blob(zone, 0, 0, 40, 4, LV_RADIUS_CIRCLE, COLOR_LINE);
     lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 6);
 

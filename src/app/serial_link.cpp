@@ -11,13 +11,14 @@
 #include "ui/header_pc.h"
 #include "ui/clock_face.h"
 #include "app/screen_power.h"
+#include "debug_log.h"
 
 static void handle_time(JsonDocument &doc) {
     if (doc["epoch"].is<long long>()) {
         long long epoch = doc["epoch"].as<long long>();
         const char *tz = doc["tz"] | "";
         clock_sync(epoch, tz);
-        Serial.printf("clock_sync(%lld, \"%s\")\n", epoch, tz);
+        debug_printf("clock_sync(%lld, \"%s\")\n", epoch, tz);
     }
     else {
         Serial.println("bad line: no epoch");
@@ -37,7 +38,7 @@ static void handle_weather(JsonDocument &doc) {
     };
     card_weather_set(&w);
     clock_face_set_weather(w.code, w.is_day, w.temp); // (the clock face shows it too)
-    Serial.printf("card_weather_set(temp %d, hi %d, lo %d, code %d, day %d, \"%s\")\n",
+    debug_printf("card_weather_set(temp %d, hi %d, lo %d, code %d, day %d, \"%s\")\n",
             w.temp, w.hi, w.lo, w.code, w.is_day, w.updated ? w.updated : "(none)");
 }
 
@@ -80,7 +81,7 @@ static void handle_jobs(JsonDocument &doc) {
         .updated = doc["updated"].as<const char *>(),
     };
     card_jobs_set(&u);
-    Serial.printf("card_jobs_set(%d jobs)\n", u.count);
+    debug_printf("card_jobs_set(%d jobs)\n", u.count);
 
     // A job working or waiting for you: something to watch, so the screen stays lit.
     bool busy = false;
@@ -120,7 +121,7 @@ static void handle_usage(JsonDocument &doc) {
                             seconds(a["five_hour_resets"]), seconds(a["seven_day_resets"])});
     }
     card_usage_set(accounts.data(), (int)accounts.size());
-    Serial.printf("card_usage_set(%d accounts)\n", (int)accounts.size());
+    debug_printf("card_usage_set(%d accounts)\n", (int)accounts.size());
 }
 
 // {"type":"hourly","updated":"14:45","summary":"Rain likely from 16:00 to 18:00",
@@ -142,7 +143,7 @@ static void handle_hourly(JsonDocument &doc) {
     hourly_update_t u = {hours.data(), (int)hours.size(), doc["summary"].as<const char *>(),
                          doc["updated"].as<const char *>()};
     card_hourly_set(&u);
-    Serial.printf("card_hourly_set(%d hours)\n", u.count);
+    debug_printf("card_hourly_set(%d hours)\n", u.count);
 }
 
 // ---------- is the PC there? ----------
@@ -216,8 +217,9 @@ void serial_poll(void) {
                 Serial.println("bad line: too long, dropped");
             } else if (len > 0) {
                 line[len] = 0;
-                // Echo only the start: at 115200 baud a 2 KB echo blocks loop() for ~0.2 s.
-                Serial.printf("Serial command: %.80s%s\n", line, len > 80 ? "..." : "");
+                // Echo only the start: at 115200 baud a 2 KB echo blocks loop() for ~0.2 s. (DESK_DEBUG only:
+                // with a ping every 10 s, a line each in sync.py's log.)
+                debug_printf("Serial command: %.80s%s\n", line, len > 80 ? "..." : "");
                 handle_line(line);
             }
             len = 0;

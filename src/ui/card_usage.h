@@ -23,7 +23,9 @@ void card_usage_create(lv_obj_t *parent);
 
 // Two lines per account, in the order given: its name with each window's bar and %, then under them
 // its plan and when each window resets ("↻ 18:00", or the day once it's more than a day away).
-// A window at 80% or more turns amber: close to the limit. Accounts past n are hidden. Copies the texts.
+// A window's bar is green, orange from 70% and red from 90% (its % too), as in Talpy Den.
+// Once a window's reset time has passed it shows 0% and no reset time, till the next reading.
+// Accounts past n are hidden. Copies the texts.
 // Call from the LVGL loop (loop()/serial handler), never from another task.
 void card_usage_set(const usage_account_t *accounts, int n);
 

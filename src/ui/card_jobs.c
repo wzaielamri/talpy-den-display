@@ -74,7 +74,8 @@ static job_row_t make_job_row(lv_obj_t *parent, int i) {
     lv_obj_set_style_border_side(r.row, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_border_color(r.row, lv_color_hex(COLOR_LINE), 0);
     lv_obj_set_style_border_width(r.row, 1, 0);
-    lv_obj_remove_flag(r.row, LV_OBJ_FLAG_SCROLLABLE);
+    // (not clickable: a tap goes through to the screen, which counts double taps: screen_main.c)
+    lv_obj_remove_flag(r.row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     r.dot = make_blob(r.row, 0, 18, 12, 12, LV_RADIUS_CIRCLE, COLOR_WORKING);
 

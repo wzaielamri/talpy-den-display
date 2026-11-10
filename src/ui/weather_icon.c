@@ -25,6 +25,7 @@ typedef enum { WX_CLEAR, WX_PARTLY, WX_OVERCAST, WX_FOG, WX_DRIZZLE, WX_RAIN, WX
 static lv_obj_t *wx_icon;   // the weather card's
 static int shown_kind = -1; // nothing shown yet
 static bool shown_day;
+static bool is_frozen;      // held still (motion.c): something covers it, also when a new icon comes then
 
 // What the draw_... functions draw into: the box, at full size (shrink 1) or half (2), moving or
 // still, and the colour behind it (the moon's cut-out disc must be exactly that to look like a hole).
@@ -262,14 +263,14 @@ void weather_icon_set(int wmo_code, bool is_day) {
     if ((int)kind == shown_kind && day == shown_day) return; // same icon: keep it running
     shown_kind = kind;
     shown_day = day;
-    draw_into(wx_icon, 1, false, COLOR_CARD, kind, day);
+    draw_into(wx_icon, 1, is_frozen, COLOR_CARD, kind, day); // (still while covered: it moves once uncovered)
 }
 
 void weather_icon_freeze(bool frozen) {
-    static bool is_frozen;
-    if (!wx_icon || shown_kind < 0 || frozen == is_frozen) return;
-    is_frozen = frozen;
-    draw_into(wx_icon, 1, frozen, COLOR_CARD, (wx_kind_t)shown_kind, shown_day); // the same picture, still or moving
+    if (frozen == is_frozen) return;
+    is_frozen = frozen; // (kept also before the first icon: it comes still then)
+    if (wx_icon && shown_kind >= 0)
+        draw_into(wx_icon, 1, frozen, COLOR_CARD, (wx_kind_t)shown_kind, shown_day); // the same picture, still or moving
 }
 
 lv_obj_t *weather_icon_small_create(lv_obj_t *parent) {

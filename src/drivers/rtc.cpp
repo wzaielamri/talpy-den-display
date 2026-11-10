@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include "debug_log.h"
 
 #define RTC_ADDR 0x51
 
@@ -30,9 +31,9 @@ bool rtc_read(time_t *utc) {
     }
     for (int i = 0; i < 7; ++i) {
         r[i] = Wire.read();
-        Serial.printf("%02X ", r[i]);
+        debug_printf("%02X ", r[i]);
     }
-    Serial.println();
+    debug_printf("\n");
     if (r[0] & 0x80) {
         Serial.println("the time can't be trusted");
         return false;

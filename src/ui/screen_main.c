@@ -4,6 +4,7 @@
 #include "card_usage.h"
 #include "card_weather.h"
 #include "clock_face.h"
+#include "double_tap.h"
 #include "header_clock.h"
 #include "header_pc.h"
 #include "lvgl.h"
@@ -36,6 +37,13 @@ void screen_main_create(void) {
     // A tap on the weather card opens the hourly forecast; it shows it's pressed (tile colour).
     lv_obj_add_event_cb(card_wx, weather_clicked, LV_EVENT_CLICKED, NULL);
     lv_obj_set_style_bg_color(card_wx, lv_color_hex(COLOR_TILE), LV_STATE_PRESSED);
+
+    // A double tap on the screen shows the clock face at once (screen_power.c), not 2 min later. The
+    // usage and jobs cards do nothing with a tap, so theirs go through to the screen (and the header's
+    // to the pull-down's zone, which counts them too: shade.c); the weather card keeps its own.
+    lv_obj_remove_flag(card_use, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(card_jobs, LV_OBJ_FLAG_CLICKABLE);
+    double_tap_watch(screen);
 
     lv_screen_load(screen);
     shade_create(); // the brightness, pulled down from the top: over whatever screen shows

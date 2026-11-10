@@ -1,6 +1,7 @@
 #include "backlight.h"
 #include <Wire.h>
 #include <Arduino.h>
+#include "debug_log.h"
 
 void sendI2CCommand(uint8_t command) {
     // Start sending commands to the specified address
@@ -15,9 +16,7 @@ void sendI2CCommand(uint8_t command) {
             break;
     }
     if (err == 0) {
-        Serial.print("command 0x");
-        Serial.print(command, HEX);
-        Serial.println(" Sent successfully");
+        debug_printf("command 0x%02X sent\n", command);
     } else {
         Serial.print("Command sent error, error code:");
         Serial.println(err);

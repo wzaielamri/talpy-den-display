@@ -6,6 +6,7 @@
 #include "ui/card_brightness.h"
 #include "ui/card_hourly.h"
 #include "ui/clock_face.h"
+#include "ui/double_tap.h"
 #include "ui/motion.h"
 #include "ui/shade.h"
 
@@ -27,9 +28,10 @@ static void light(void) {
 static void show_clock(bool on) {
     if (on == clock_shown) return;
     clock_shown = on;
+    // Back to the overview for when the cards come back: the pull-down panel up (and not to be pulled
+    // over the clock, whose every touch brings the cards back), the hourly view closed.
+    shade_allow(!on);
     if (on) {
-        // Back to the overview for when the cards come back: the pull-down panel up, the hourly view closed.
-        shade_close();
         card_hourly_hide();
         clock_face_show();
     } else {
@@ -37,6 +39,12 @@ static void show_clock(bool on) {
     }
     motion_hold(MOTION_CLOCK, on); // (under the clock nothing on the cards needs to move)
     light();
+}
+
+// A double tap on the cards (ui/double_tap.c): the clock face now, as if 2 min had gone by. It stays
+// till a touch or something to see (a job starting, an alert), also with a job busy or "Stay on".
+static void clock_now(void) {
+    show_clock(true);
 }
 
 static void save_brightness(lv_timer_t *timer) {
@@ -101,5 +109,6 @@ void screen_power_init(void) {
     shade_set_stay_on(stay_on);
     light();
     clock_face_on_touch(screen_power_wake);
+    double_tap_set_callback(clock_now);
     lv_timer_create(tick, 500, NULL);
 }

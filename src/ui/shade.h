@@ -13,6 +13,10 @@ void shade_create(void);
 void shade_open(void);
 void shade_close(void);
 
+// Whether it can be pulled down. Not over the clock face (screen_power.c): there the strip at the top
+// that takes the pull (and its hint pill) would keep a touch from bringing the cards back. Off, it closes.
+void shade_allow(bool allowed);
+
 // Its "Stay on" toggle (next to the brightness): called with true when it's switched on, false off.
 typedef void (*stay_on_cb_t)(bool on);
 void shade_set_stay_on_callback(stay_on_cb_t cb);
