@@ -24,7 +24,8 @@ Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
   done ones go first, then the working ones.
 - time: at the start and every 10 minutes (the board keeps it in its RTC).
 - weather and hourly: from Open-Meteo every 15 minutes, for --lat/--lon (none without them), fetched on
-  a thread of its own so that a slow network can't hold up the rest.
+  a thread of its own so that a slow network can't hold up the rest. A failed fetch (no network yet at
+  login, say) is tried again after 30 s, then 1, 2, 4, 8 and 15 min.
 - ping: when nothing else went out for 10 s: the board takes the PC for away after 60 s of silence.
 When the board restarts (it prints "Setup done") or the port comes back, everything is sent again.
 What the board prints goes to this script's output (the journal, for the service): its errors and
@@ -51,6 +52,7 @@ import serial
 
 TIME_EVERY = 600     # s between time messages
 WEATHER_EVERY = 900  # s between weather fetches
+WEATHER_RETRY = 30   # s after a failed fetch till the next try (doubling each time, up to WEATHER_EVERY)
 PING_EVERY = 10      # s of silence before a ping
 USAGE_ROWS = 2       # accounts the board's usage card has room for
 MAX_LINE = 8000      # bytes of a jobs message: the board drops a longer line whole (SERIAL_LINE_MAX, serial_link.cpp)
@@ -322,13 +324,18 @@ class WeatherWorker(threading.Thread):
         self.results = queue.SimpleQueue()
 
     def run(self):
+        retry = None  # s till the next try after a failed one (None: the last one worked, wait to be asked)
         while True:
-            self.asked.wait()
+            self.asked.wait(retry)  # (asked, or the retry's time came)
             self.asked.clear()
             try:
                 self.results.put(fetch_weather(self.lat, self.lon))
+                retry = None
             except Exception as exc:  # (whatever the network does: this thread must not end)
-                print(f"weather: {exc}; again in {WEATHER_EVERY // 60} min")
+                # Soon again: at login the network often isn't up yet, and the card would wait 15 min.
+                retry = min(retry * 2, WEATHER_EVERY) if retry else WEATHER_RETRY
+                print(f"weather: {exc}; again in {retry} s" if retry < 60 else
+                      f"weather: {exc}; again in {retry // 60} min")
 
 
 # ---------- made-up examples (--demo) ----------
