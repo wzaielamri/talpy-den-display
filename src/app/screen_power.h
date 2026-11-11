@@ -9,7 +9,7 @@ extern "C" {
 // What the screen shows and how bright, 24/7. Never dark, and the LCD always refreshed:
 // - the cards (at the slider's brightness) while someone looks: a touch in the last 2 min, a job
 //   working or waiting, or "Stay on";
-// - else the clock face (ui/clock_face.c), dimmed to half the slider's brightness, and always while
+// - else the clock face (ui/clock_face.c), dimmed to 10% (where the backlight doesn't hum), and always while
 //   the PC is away (no message for a while: suspended, shut down, unplugged), or at once after a double
 //   tap on the cards. A touch on it brings the cards back for 2 min.
 // The brightness and "Stay on" are saved (app/settings.cpp) and come back after a restart.

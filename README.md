@@ -29,9 +29,10 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 - **Weather:** now, today's high and low, and the next 8 hours with rain chances, from
   [Open-Meteo](https://open-meteo.com/) (no API key needed).
 - **Brightness:** swipe down from the top for the brightness slider and a **Stay on** toggle. The
-  board remembers both after a restart.
-- **Clock face:** after 2 minutes without a touch, the screen switches to a big clock at half
-  brightness. It doesn't switch while a chat is working or waiting, or while Stay on is set. It also
+  board remembers both after a restart. Between about 12% and 99% the backlight hums quietly: its
+  controller dims it by switching it on and off at an audible rate, which the code can't change.
+- **Clock face:** after 2 minutes without a touch, the screen switches to a big clock, dimmed
+  to 10%. It doesn't switch while a chat is working or waiting, or while Stay on is set. It also
   shows the clock while the PC is away (no message for 60 s), so a board on a powered hub can stay on
   day and night. The clock moves a few pixels each minute so nothing burns in. Double-tap the screen
   (anywhere but the weather card) to show it right away. Touch it to come back.

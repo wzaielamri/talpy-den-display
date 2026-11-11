@@ -11,7 +11,10 @@
 #include "ui/shade.h"
 
 #define CLOCK_AFTER_MS 120000 // no touch for this long (no job working or waiting, no "Stay on"): the clock
-#define CLOCK_DIM      50     // the clock face's brightness: this % of the slider's
+// The clock face's brightness, in the slider's %: low enough that the backlight is silent. Its controller
+// (the STC8 at I2C 0x30) dims by PWM at a rate set in its own firmware, and the board hums from 99% down
+// to 12%; only 100% and the lowest levels are quiet. 10% is backlight value 242 (244 is dimmest).
+#define CLOCK_PERCENT  10
 #define SAVE_AFTER_MS  2000   // the slider still for this long: its value is saved (not every step of a drag)
 
 static int32_t brightness = 100; // the slider's value
@@ -22,7 +25,8 @@ static bool clock_shown;
 static lv_timer_t *save_timer;
 
 static void light(void) {
-    backlight_set_percent(clock_shown ? brightness * CLOCK_DIM / 100 : brightness);
+    // (a slider set lower still keeps its own value: the clock is never brighter than the cards)
+    backlight_set_percent(clock_shown && brightness > CLOCK_PERCENT ? CLOCK_PERCENT : brightness);
 }
 
 static void show_clock(bool on) {

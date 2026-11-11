@@ -482,7 +482,7 @@ el({ s: "shade", id: "shade_handle", widget: "obj", parent: "shade", d: { x: 380
 el({ s: "clock", group: "Clock face, over everything on the main screen (made last)" });
 el({ s: "clock", id: "clock_face", widget: "obj", parent: "screen", d: { x: 0, y: 0, w: 800, h: 480 },
      style: { background: col("bg") }, place: "TOP_LEFT 0, 0", size: "lv_pct(100) × lv_pct(100)", color: "bg",
-     note: "Screen colour, opaque, clickable: a touch (LV_EVENT_PRESSED) brings the cards back and doesn't reach them. Hidden till screen_power.c shows it: after 2 min without a touch (no job working or waiting, no Stay on), while the PC is away, and at once on a double tap (two taps within 500 ms) on the screen, the usage or jobs card or the header (ui/double_tap.c; the weather card keeps its tap). It stays till a touch, a job starting or an alert. The backlight then at half the slider's brightness (CLOCK_DIM 50)." });
+     note: "Screen colour, opaque, clickable: a touch (LV_EVENT_PRESSED) brings the cards back and doesn't reach them. Hidden till screen_power.c shows it: after 2 min without a touch (no job working or waiting, no Stay on), while the PC is away, and at once on a double tap (two taps within 500 ms) on the screen, the usage or jobs card or the header (ui/double_tap.c; the weather card keeps its tap). It stays till a touch, a job starting or an alert. The backlight then at 10% (CLOCK_PERCENT, screen_power.c): from 99% down to 12% the backlight hums." });
 el({ s: "clock", id: "clock_content", widget: "obj", parent: "clock_face", d: { x: 220, y: 124, w: 360, h: 231 },
      place: "CENTER, moved each minute", size: "LV_SIZE_CONTENT",
      note: "Flex column, centred, 16 px apart, no background. Each minute to the next of 8 spots around the middle, within 6 px (SHIFT in clock_face.c), so no pixel shows the same thing for hours." });
@@ -675,7 +675,7 @@ const MODES = {
   },
   clock: {
     btn: "btn-clock", hash: "clock", title: "Every element: clock face (over the whole main screen)",
-    caption: "What the screen shows when nobody looks: after 2 min without a touch (no job working or waiting, no Stay on), and always while the PC is away (as here, with “PC offline”). Half the slider's brightness and nothing moving; the time is drawn again once a minute and everything moves a few pixels each minute, so no picture stays put on the LCD for hours. A double tap on the cards brings it at once; a touch brings the cards back."
+    caption: "What the screen shows when nobody looks: after 2 min without a touch (no job working or waiting, no Stay on), and always while the PC is away (as here, with “PC offline”). Dimmed to 10% (where the backlight doesn't hum) and nothing moving; the time is drawn again once a minute and everything moves a few pixels each minute, so no picture stays put on the LCD for hours. A double tap on the cards brings it at once; a touch brings the cards back."
   },
   done: {
     btn: "btn-done", hash: "done", title: "Every element: alert, a job finished (the same box, in green)",
