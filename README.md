@@ -160,7 +160,11 @@ clock digits come from [Montserrat](https://github.com/JulietaUla/Montserrat) (S
 1.1). Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Claude is a trademark of
 Anthropic, which this project isn't affiliated with.
 
+## Author
+
+Made by Wadhah Zai El Amri: more of my projects and work are on [my website](https://wzaielamri.github.io).
+
 ## License
 
-[MIT](LICENSE). The clock font in `src/ui/font_clock_128.c` is made from Montserrat and keeps its
-SIL Open Font License 1.1.
+[MIT](LICENSE) © 2026 Wadhah Zai El Amri. The clock font in `src/ui/font_clock_128.c` is made from
+Montserrat and keeps its SIL Open Font License 1.1.
