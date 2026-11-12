@@ -9,7 +9,7 @@ serial, so the board needs no Wi-Fi and holds no passwords or tokens.
 
 Talpy Den writes the chats and usage to a small JSON file whenever something changes, and
 `host/sync.py` passes them on to the board. Any other program can write that file too
-(see [Feeding it](#feeding-it)).
+(see [How it gets its data](#how-it-gets-its-data)).
 
 ![The main screen: weather, plan usage and the jobs card](design/desk-display-normal.png)
 
@@ -95,7 +95,7 @@ sends, and building the board with `-D DESK_DEBUG=1` in `platformio.ini` makes i
 The service holds the serial port. To flash, stop it first:
 `systemctl --user stop desk-display-sync && pio run -t upload && systemctl --user start desk-display-sync`.
 
-## Feeding it
+## How it gets its data
 
 `host/sync.py` watches `$XDG_RUNTIME_DIR/talpy-den/jobs.json` with inotify, so there's no polling.
 Talpy Den writes this file whenever a chat's state or an account's usage changes, by replacing it in
