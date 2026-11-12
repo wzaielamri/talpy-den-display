@@ -5,6 +5,8 @@ shows your Claude Code chats at a glance: which ones are working, which need you
 finished. It also shows your plan usage, the time and the weather. Your Linux PC feeds it over USB
 serial, so the board needs no Wi-Fi and holds no passwords or tokens.
 
+<p align="center"><img src="design/desk-display-photo.jpg" alt="The display on its 3D-printed stand, plugged in over USB: the time, the weather, plan usage and one chat working on an SSH host" width="640"></p>
+
 Talpy Den writes the chats and usage to a small JSON file whenever something changes, and
 `host/sync.py` passes them on to the board. Any other program can write that file too
 (see [Feeding it](#feeding-it)).
@@ -126,7 +128,7 @@ handler is documented in [`src/app/serial_link.cpp`](src/app/serial_link.cpp).
 
 [`design/desk-display-layout.html`](design/desk-display-layout.html) is the layout spec: every card's
 position, size, colour, font and state, with the LVGL calls behind them. Download it and open it in
-a browser (it loads its fonts from Google Fonts). The pictures above are exported from it.
+a browser (it loads its fonts from Google Fonts). The screenshots above are exported from it.
 
 The clock's digits are Montserrat Medium at 128 px. LVGL's built-in fonts stop at 48 px, so
 [`tools/make_clock_font.py`](tools/make_clock_font.py) generates `src/ui/font_clock_128.c` (needs
@@ -145,7 +147,7 @@ src/ui/          cards, pull-down panel, alert, clock face, weather icons (LVGL 
 src/drivers/     display, touch, backlight, real-time clock
 include/         lv_conf.h, theme colours, pins
 host/            sync.py, the udev rule, the systemd user service
-design/          the layout spec and its pictures
+design/          the layout spec, its screenshots and the photo
 tools/           the clock font generator
 ```
 
