@@ -6,8 +6,8 @@
 extern "C" {
 #endif
 
-// The clock face: the time big in the middle, the date under it, the weather (icon and temperature)
-// under that, over everything else on the main screen. screen_power.c shows it after 2 min without
+// The clock face: the time big in the middle, the date under it, Talpy asleep (a still picture),
+// the weather (icon and temperature) under that, over everything else on the main screen. screen_power.c shows it after 2 min without
 // a touch (no job working or waiting, no "Stay on") and while the PC is away, dimmed; a touch on it
 // calls the touch callback (back to the cards). It's what the screen shows 24/7 when nobody looks,
 // so nothing on it moves: the time is drawn again once a minute, and the whole face moves a few

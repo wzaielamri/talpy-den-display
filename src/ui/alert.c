@@ -1,4 +1,5 @@
 #include "alert.h"
+#include "talpy.h"
 #include "theme.h"
 #include "ui_common.h"
 
@@ -10,7 +11,7 @@
 // is drawn while the alert shows (its animations go on, unseen), and the main screen comes back as it was.
 static lv_obj_t *alert_scr; // NULL until the first alert
 static lv_obj_t *back_to;   // the screen it took the place of
-static lv_obj_t *box, *badge, *icon, *al_kicker, *al_name, *al_detail, *ok;
+static lv_obj_t *box, *al_talpy, *al_kicker, *al_name, *al_detail, *ok;
 static bool showing;
 static alert_kind_t shown_kind;
 static lv_timer_t *done_timer;
@@ -42,14 +43,15 @@ static void create(void) {
     lv_obj_set_style_border_side(box, LV_BORDER_SIDE_LEFT, 0);
     lv_obj_set_style_border_width(box, 6, 0);
 
-    // The kind's sign in its round badge, top left; the kicker next to it.
-    badge = make_blob(box, 0, 0, 40, 40, LV_RADIUS_CIRCLE, COLOR_ALERT);
-    icon = make_label(badge, &lv_font_montserrat_24, COLOR_WAIT, "");
-    lv_obj_center(icon);
+    // Spec: Talpy over the box's top right, its burrow on the box's top edge; drawn after the box, so over it.
+    // Frozen (no timer running) while no alert shows.
+    al_talpy = talpy_create(alert_scr);
+    lv_obj_align_to(al_talpy, box, LV_ALIGN_OUT_TOP_RIGHT, -40, 12);
+    talpy_freeze(al_talpy, true);
 
     al_kicker = make_label(box, &lv_font_montserrat_14, COLOR_WAIT, "");
     lv_obj_set_style_text_letter_space(al_kicker, 1, 0);
-    lv_obj_set_pos(al_kicker, 52, 12);
+    lv_obj_set_pos(al_kicker, 0, 12);
 
     al_name = make_label(box, &lv_font_montserrat_40, COLOR_TEXT, "");
     lv_obj_set_size(al_name, 504, lv_font_get_line_height(&lv_font_montserrat_40));
@@ -72,14 +74,11 @@ static void create(void) {
     lv_obj_center(ok_text);
 }
 
-// The kind's colours and sign: waiting amber with a bell, done green with a check.
+// The kind's colours: waiting amber, done green.
 static void paint(alert_kind_t kind) {
     bool done = kind == ALERT_DONE;
     lv_color_t c = lv_color_hex(done ? COLOR_DONE : COLOR_WAIT);
     lv_obj_set_style_border_color(box, c, 0);
-    lv_obj_set_style_bg_color(badge, lv_color_hex(done ? COLOR_PC : COLOR_ALERT), 0);
-    lv_obj_set_style_text_color(icon, c, 0);
-    lv_label_set_text(icon, done ? LV_SYMBOL_OK : LV_SYMBOL_BELL);
     lv_obj_set_style_text_color(al_kicker, c, 0);
     lv_obj_set_style_bg_color(ok, c, 0);
 }
@@ -96,6 +95,15 @@ bool alert_show(alert_kind_t kind, const char *kicker, const char *name, const c
     lv_label_set_text(al_name, name ? name : "");
     lv_label_set_text(al_detail, detail ? detail : "");
     shown_kind = kind;
+
+    // Done first, then the reaction: it is ignored while the mood is NEEDS, so a done alert after a waiting one plays it.
+    if (kind == ALERT_DONE) {
+        talpy_set_mood(al_talpy, TALPY_DONE);
+        talpy_react_finished(al_talpy);
+    } else {
+        talpy_set_mood(al_talpy, TALPY_NEEDS);
+    }
+    talpy_freeze(al_talpy, false);
 
     // A finished job's alert goes by itself; a waiting one stays.
     if (done_timer) {
@@ -122,5 +130,6 @@ void alert_hide(void) {
         lv_timer_delete(done_timer);
         done_timer = NULL;
     }
+    talpy_freeze(al_talpy, true);
     if (back_to) lv_screen_load(back_to);
 }

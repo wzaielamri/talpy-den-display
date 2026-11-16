@@ -1,5 +1,7 @@
 #include "clock_face.h"
 #include "app/clock.h"
+#include "talpy.h"
+#include "talpy_set.h"
 #include "theme.h"
 #include "ui_common.h"
 #include "weather_icon.h"
@@ -108,13 +110,15 @@ void clock_face_create(lv_obj_t *screen) {
     lv_obj_add_event_cb(face, face_pressed, LV_EVENT_PRESSED, NULL);
 
     // Spec: one column, centred, 16 px apart: the time (font_clock_128), the date (montserrat_24,
-    // muted), the weather (its icon at half size, still, and the temperature in montserrat_40), and
+    // muted), Talpy asleep (one still picture), the weather (its icon at half size, still, and the temperature in montserrat_40), and
     // "PC offline" (montserrat_14, dim) while the PC isn't there.
     content = make_box(face, LV_FLEX_FLOW_COLUMN, 16);
     lv_obj_align(content, LV_ALIGN_CENTER, 0, 0);
 
     time_label = make_label(content, &font_clock_128, COLOR_TEXT, "--:--");
     date_label = make_label(content, &lv_font_montserrat_24, COLOR_MUTED, "");
+
+    talpy_create_still(content, TALPY_SET.sleep_still); // (one picture, no animation: it shifts with the face)
 
     weather_row = make_box(content, LV_FLEX_FLOW_ROW, 12);
     weather_icon = weather_icon_small_create(weather_row);
