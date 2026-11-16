@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-// What moves on the main screen (the weather icon, the banner's Talpy) holds still while something
+// What moves on the main screen (the weather Talpy, the banner's Talpy) holds still while something
 // covers it: drawn again and again under a see-through cover it showed through (the pull-down's
 // dimming), and under the clock face or the alert's screen nobody sees it anyway. Each cover holds
 // and lets go on its own; it moves again once none holds it.

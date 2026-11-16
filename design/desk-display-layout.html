@@ -581,7 +581,7 @@ el({ s: "clock", id: "clock_pc", widget: "label", parent: "clock_content", nodra
 el({ s: "alert", group: "Alert: a job waiting for you, on a screen of its own" });
 el({ s: "alert", id: "alert_scr", widget: "screen", parent: "(none)", d: { x: 0, y: 0, w: 800, h: 480 },
      style: { background: col("bg") }, place: "lv_obj_create(NULL)", size: "800 × 480", color: "bg",
-     note: "A screen of its own, loaded with lv_screen_load() while the alert shows; the screen it took the place of is loaded again after. Nothing of the main screen is drawn meanwhile: on lv_layer_top() over a see-through dim, its animations (the weather icon, the old waiting tile's border) kept being drawn under it and showed through, flickering." });
+     note: "A screen of its own, loaded with lv_screen_load() while the alert shows; the screen it took the place of is loaded again after. Nothing of the main screen is drawn meanwhile: on lv_layer_top() over a see-through dim, its animations (the weather Talpy, the old waiting tile's border) kept being drawn under it and showed through, flickering." });
 el({ s: "alert", id: "alert_box", widget: "obj", parent: "alert_scr", d: { x: 120, y: 110, w: 560, h: 260 },
      style: { background: col("card"), borderRadius: "20px", boxShadow: "inset 6px 0 0 " + col("wait") },
      place: "CENTER 0, 0", size: "560 × 260", color: "card",

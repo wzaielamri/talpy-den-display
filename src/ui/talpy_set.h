@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-// Talpy's pictures for the display, made by tools/make_talpy_frames.py from Talpy Den's own drawing code (the data
-// is src/ui/talpy_data.c). Pure C: built for the board and by host gcc for the tests.
+// Talpy's pictures for the display, made by tools/make_talpy_frames.py from Talpy Den's own drawing code (the data:
+// src/ui/talpy_data.c, the banner's set, and src/ui/talpy_weather_data.c, the weather set). Pure C: built for the
+// board and by host gcc for the tests.
 //
 // Each frame is compressed (see talpy_codec.h); a clip is a list of steps (a frame shown for so many ms); each mood
 // has a rest clip looped during its pauses and a weighted pick of clips, as Talpy Den's MOODS.

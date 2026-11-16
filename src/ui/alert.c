@@ -7,7 +7,7 @@
 #define DONE_HIDE_MS 15000 // a "finished" alert goes by itself after this long
 
 // Why a screen of its own: on lv_layer_top() over a see-through dim, LVGL kept drawing the main screen
-// under it, its animations (the weather icon, the jobs banner) too, blending the dim over them again on
+// under it, its animations (the weather Talpy, the jobs banner) too, blending the dim over them again on
 // every frame: they showed through and flickered. With its own screen loaded, nothing of the main screen
 // is drawn while the alert shows (its animations are held meanwhile: MOTION_ALERT), and the main screen
 // comes back as it was.

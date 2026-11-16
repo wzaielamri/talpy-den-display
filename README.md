@@ -150,10 +150,10 @@ python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_data.c
 python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_weather_data.c --set weather
 ```
 
-The results, `src/ui/talpy_data.c` and `src/ui/talpy_weather_data.c`, are committed, so building the board needs none of this. On the same
-machine the same checkout gives the same file (the z's use the system's sans-serif through
-rsvg/fontconfig, and the output depends on the rsvg version). Add `--pngs DIR` to also write the
-pictures the layout spec uses.
+The results, `src/ui/talpy_data.c` and `src/ui/talpy_weather_data.c`, are committed, so building
+the board needs none of this. On the same machine the same checkout gives the same files (the z's
+use the system's sans-serif through rsvg/fontconfig, and the output depends on the rsvg version).
+Add `--pngs DIR` to also write the pictures the layout spec uses.
 
 The clock's digits are Montserrat Medium at 128 px. LVGL's built-in fonts stop at 48 px, so
 [`tools/make_clock_font.py`](tools/make_clock_font.py) generates `src/ui/font_clock_128.c` (needs

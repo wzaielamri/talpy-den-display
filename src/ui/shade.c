@@ -40,7 +40,7 @@ static int32_t finger_y(void) {
 }
 
 // The panel on its way down: the screen dims (once) and the panel shows. What moves on the screen
-// (the weather icon, the jobs banner's Talpy) holds still meanwhile: drawn again and again under the
+// (the weather Talpy, the jobs banner's Talpy) holds still meanwhile: drawn again and again under the
 // dimming, it showed through undimmed.
 static void come_down(void) {
     motion_hold(MOTION_SHADE, true);
