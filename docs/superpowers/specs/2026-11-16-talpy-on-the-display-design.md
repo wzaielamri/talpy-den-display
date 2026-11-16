@@ -104,7 +104,8 @@ The owner picked 1.
 - Headline, as Talpy Den's `headlineText()`, first that applies:
   - any waiting: "1 chat needs you" / "N chats need you" (orange)
   - else any working: "1 chat working" / "N chats working"
-  - else any done: "1 finished chat to look at" / "N finished chats to look at"
+  - else any done: "1 finished chat" / "N finished chats" (Talpy Den adds "to look at"; dropped
+    here, it doesn't fit beside Talpy: 322 px for 12 chats, about 292 px free)
   - else: "All quiet"
   - before the first jobs message: "Waiting for the PC" (today's empty-rows text)
 - The counts line keeps the three numbers the tiles showed today: "● 1 waiting ● 2 working ● 2 done",
