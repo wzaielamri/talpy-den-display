@@ -12,6 +12,7 @@
 typedef struct {
     lv_obj_t *img;
     lv_timer_t *timer; // NULL for a still
+    const talpy_set_t *set;
     talpy_player_t player;
     lv_image_dsc_t dsc;
     uint8_t *buf;
@@ -19,8 +20,8 @@ typedef struct {
 
 // Decode one frame into the widget's buffer and redraw. A frame that doesn't decode leaves the last one.
 static void show_frame(talpy_t *t, uint16_t i) {
-    const talpy_frame_t *f = &TALPY_SET.frames[i];
-    if (!talpy_decode(TALPY_SET.data + f->offset, f->size, f->w, f->h, t->buf)) {
+    const talpy_frame_t *f = &t->set->frames[i];
+    if (!talpy_decode(t->set->data + f->offset, f->size, f->w, f->h, t->buf)) {
         static bool told; // once for all widgets: a frame that keeps failing must not flood the UART
         if (!told) printf("talpy: frame %u doesn't decode\n", (unsigned)i);
         told = true;
@@ -50,7 +51,7 @@ static uint8_t *alloc_buf(size_t size) {
 }
 
 // The state for a w x h picture on img; NULL when there is no memory (the image then stays empty, nothing to free).
-static talpy_t *make(lv_obj_t *img, uint16_t w, uint16_t h) {
+static talpy_t *make(lv_obj_t *img, const talpy_set_t *set, uint16_t w, uint16_t h) {
     size_t size = (size_t)w * h * 3;
     talpy_t *t = (talpy_t *)calloc(1, sizeof(talpy_t));
     uint8_t *buf = t ? alloc_buf(size) : NULL;
@@ -62,6 +63,7 @@ static talpy_t *make(lv_obj_t *img, uint16_t w, uint16_t h) {
         return NULL;
     }
     t->img = img;
+    t->set = set;
     t->buf = buf;
     t->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
     t->dsc.header.cf = LV_COLOR_FORMAT_RGB565A8;
@@ -81,22 +83,24 @@ static lv_obj_t *new_image(lv_obj_t *parent) {
     return img;
 }
 
-lv_obj_t *talpy_create(lv_obj_t *parent) {
+lv_obj_t *talpy_create_set(lv_obj_t *parent, const talpy_set_t *set) {
     lv_obj_t *img = new_image(parent);
-    talpy_t *t = make(img, TALPY_SET.w, TALPY_SET.h);
+    talpy_t *t = make(img, set, set->w, set->h);
     if (!t) return img;
-    talpy_player_init(&t->player, &TALPY_SET, esp_random(), lv_tick_get());
+    talpy_player_init(&t->player, set, esp_random(), lv_tick_get());
     show_frame(t, talpy_player_frame(&t->player));
     lv_image_set_src(img, &t->dsc);
     t->timer = lv_timer_create(on_timer, TICK_MS, t);
     return img;
 }
 
+lv_obj_t *talpy_create(lv_obj_t *parent) { return talpy_create_set(parent, &TALPY_SET); }
+
 lv_obj_t *talpy_create_still(lv_obj_t *parent, uint16_t frame) {
     lv_obj_t *img = new_image(parent);
     if (frame >= TALPY_SET.frame_count) frame = 0;
     const talpy_frame_t *f = &TALPY_SET.frames[frame];
-    talpy_t *t = make(img, f->w, f->h);
+    talpy_t *t = make(img, &TALPY_SET, f->w, f->h);
     if (!t) return img;
     show_frame(t, frame);
     lv_image_set_src(img, &t->dsc);
@@ -109,12 +113,22 @@ static talpy_t *moving(lv_obj_t *obj) {
     return t && t->timer ? t : NULL;
 }
 
-void talpy_set_mood(lv_obj_t *obj, talpy_mood_t mood) {
+void talpy_set_mood(lv_obj_t *obj, uint16_t mood) {
     talpy_t *t = moving(obj);
     if (!t) return;
     uint16_t before = talpy_player_frame(&t->player);
     talpy_player_set_mood(&t->player, mood, lv_tick_get());
     if (talpy_player_frame(&t->player) != before) show_frame(t, talpy_player_frame(&t->player));
+}
+
+void talpy_set_pace(lv_obj_t *obj, uint8_t pace) {
+    talpy_t *t = moving(obj);
+    if (t) talpy_player_set_pace(&t->player, pace);
+}
+
+void talpy_play_once(lv_obj_t *obj, uint16_t clip) {
+    talpy_t *t = moving(obj);
+    if (t && talpy_player_play_once(&t->player, clip, lv_tick_get())) show_frame(t, talpy_player_frame(&t->player));
 }
 
 void talpy_react_finished(lv_obj_t *obj) {

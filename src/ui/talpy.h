@@ -15,7 +15,12 @@ extern "C" {
 // A moving Talpy (TALPY_SET.w x h), mood TALPY_LOADING, running. Deleting the object frees everything.
 lv_obj_t *talpy_create(lv_obj_t *parent);
 
-void talpy_set_mood(lv_obj_t *t, talpy_mood_t mood); // shown at once
+// A moving Talpy drawn from any set (the weather Talpy's), mood 0, running. Deleting the object frees everything.
+lv_obj_t *talpy_create_set(lv_obj_t *parent, const talpy_set_t *set);
+
+void talpy_set_mood(lv_obj_t *t, uint16_t mood);     // shown at once (a talpy_mood_t or tw_mood_t value)
+void talpy_set_pace(lv_obj_t *t, uint8_t pace);      // 1..8: slower pauses between idle clips
+void talpy_play_once(lv_obj_t *t, uint16_t clip);    // plays one clip of the set once, then back to the mood
 void talpy_react_finished(lv_obj_t *t);              // plays the "finished" reaction once (not while NEEDS)
 
 // on: its timer pauses and the current frame stays; off: it goes on.
