@@ -44,13 +44,13 @@ static void test_tables_consistent(void) {
     }
     for (uint16_t i = 0; i < s->pick_count; i++)
         CHECK(s->picks[i].clip < s->clip_count);
-    for (int m = 0; m < TALPY_MOODS; m++) {
+    for (int m = 0; m < s->mood_count; m++) {
         CHECK(s->moods[m].rest_clip < s->clip_count);
         CHECK(s->moods[m].picks >= 1);
         CHECK(s->moods[m].first_pick + s->moods[m].picks <= s->pick_count);
         CHECK(s->moods[m].pause_min_ms <= s->moods[m].pause_max_ms);
     }
-    CHECK(s->finished_clip < s->clip_count);
+    CHECK(s->react_clip < s->clip_count);
     CHECK(s->sleep_still < s->frame_count);
     CHECK(s->h <= 112);
     CHECK(s->data_size <= 2000000);

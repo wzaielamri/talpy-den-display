@@ -21,6 +21,18 @@ static const talpy_pick_t picks[] = {
     {4, 30}, {5, 10}, // working: A 30, B 10
     {4, 10},          // done
 };
+static const talpy_mood_def_t moods[] = {
+    [TALPY_LOADING] = {0, 0, 1, 500, 1500},
+    [TALPY_NEEDS] = {1, 1, 1, 500, 1500},
+    [TALPY_WORKING] = {2, 2, 2, 500, 1500},
+    [TALPY_DONE] = {3, 4, 1, 500, 1500},
+    [TALPY_MOODS] = {2, 0, 0, 500, 1500},     // 4: no picks, rests forever
+    [TALPY_MOODS + 1] = {2, 2, 2, 9000, 9000}, // 5: long pauses
+    [TALPY_MOODS + 2] = {2, 2, 2, 1000, 1000}, // 6: pause exactly 1000
+};
+#define M_NOPICKS TALPY_MOODS
+#define M_LONG (TALPY_MOODS + 1)
+#define M_ONE (TALPY_MOODS + 2)
 static const talpy_set_t set = {
     .w = 10,
     .h = 10,
@@ -30,14 +42,9 @@ static const talpy_set_t set = {
     .clip_count = 7,
     .picks = picks,
     .pick_count = 5,
-    .moods =
-        {
-            [TALPY_LOADING] = {0, 0, 1, 500, 1500},
-            [TALPY_NEEDS] = {1, 1, 1, 500, 1500},
-            [TALPY_WORKING] = {2, 2, 2, 500, 1500},
-            [TALPY_DONE] = {3, 4, 1, 500, 1500},
-        },
-    .finished_clip = 6,
+    .moods = moods,
+    .mood_count = 7,
+    .react_clip = 6,
 };
 
 // Ticks every 10 ms from *now until the frame is a clip frame (5 or 7); false if it does not within limit_ms.
@@ -254,7 +261,73 @@ static void test_millis_wrap(void) {
     CHECK(now < 0xFFFFFF00u); // really crossed the wrap
 }
 
+static void test_play_once_plays_then_rests(void) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 1, 0);
+    talpy_player_set_mood(&p, TALPY_WORKING, 0);
+    CHECK(talpy_player_play_once(&p, 5, 10));
+    CHECK(talpy_player_frame(&p) == 7);
+    CHECK(talpy_player_tick(&p, 110));
+    CHECK(talpy_player_frame(&p) == 2);
+    CHECK(p.clip == -1);
+}
+
+static void test_play_once_bad_clip(void) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 1, 0);
+    talpy_player_set_mood(&p, TALPY_WORKING, 0);
+    CHECK(!talpy_player_play_once(&p, 99, 10));
+    CHECK(talpy_player_frame(&p) == 2);
+}
+
+static void test_mood_without_picks_rests(void) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 1, 0);
+    talpy_player_set_mood(&p, M_NOPICKS, 0);
+    for (uint32_t now = 0; now <= 60000; now += 10) {
+        talpy_player_tick(&p, now);
+        CHECK(talpy_player_frame(&p) == 2);
+    }
+}
+
+static void test_slow_pace_not_overdue(void) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 1, 0);
+    talpy_player_set_pace(&p, 3);
+    talpy_player_set_mood(&p, M_LONG, 0);
+    uint32_t now = 0;
+    for (; now < 27000; now += 10) {
+        talpy_player_tick(&p, now);
+        CHECK(talpy_player_frame(&p) == 2);
+    }
+    CHECK(run_to_clip(&p, &now, 100));
+}
+
+static void pace_clip_time(uint8_t pace, uint32_t expect) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 1, 0);
+    talpy_player_set_pace(&p, pace);
+    talpy_player_set_mood(&p, M_ONE, 0);
+    uint32_t now = 0;
+    for (; now < expect; now += 10) {
+        talpy_player_tick(&p, now);
+        CHECK(talpy_player_frame(&p) == 2);
+    }
+    talpy_player_tick(&p, now);
+    CHECK(talpy_player_frame(&p) != 2);
+}
+
+static void test_pace_clamped(void) {
+    pace_clip_time(0, 1000);
+    pace_clip_time(20, 8000);
+}
+
 int main(void) {
+    test_play_once_plays_then_rests();
+    test_play_once_bad_clip();
+    test_mood_without_picks_rests();
+    test_slow_pace_not_overdue();
+    test_pace_clamped();
     test_init_rests_in_loading();
     test_zero_seed_not_stuck();
     test_set_mood_shows_rest_at_once();

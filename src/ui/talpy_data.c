@@ -63790,6 +63790,13 @@ static const talpy_pick_t PICKS[] = {
     {12, 6}, /* nap */
 };
 
+static const talpy_mood_def_t MOODS[] = {
+    [TALPY_LOADING] = {.rest_clip = 0, .first_pick = 0, .picks = 1, .pause_min_ms = 800, .pause_max_ms = 2000},
+    [TALPY_NEEDS] = {.rest_clip = 2, .first_pick = 1, .picks = 3, .pause_min_ms = 300, .pause_max_ms = 900},
+    [TALPY_WORKING] = {.rest_clip = 6, .first_pick = 4, .picks = 3, .pause_min_ms = 500, .pause_max_ms = 1500},
+    [TALPY_DONE] = {.rest_clip = 10, .first_pick = 7, .picks = 2, .pause_min_ms = 1500, .pause_max_ms = 3500},
+};
+
 const talpy_set_t TALPY_SET = {
     .data = DATA,
     .data_size = 1266971,
@@ -63803,12 +63810,10 @@ const talpy_set_t TALPY_SET = {
     .clip_count = 14,
     .picks = PICKS,
     .pick_count = 9,
-    .moods = {
-        [TALPY_LOADING] = {.rest_clip = 0, .first_pick = 0, .picks = 1, .pause_min_ms = 800, .pause_max_ms = 2000},
-        [TALPY_NEEDS] = {.rest_clip = 2, .first_pick = 1, .picks = 3, .pause_min_ms = 300, .pause_max_ms = 900},
-        [TALPY_WORKING] = {.rest_clip = 6, .first_pick = 4, .picks = 3, .pause_min_ms = 500, .pause_max_ms = 1500},
-        [TALPY_DONE] = {.rest_clip = 10, .first_pick = 7, .picks = 2, .pause_min_ms = 1500, .pause_max_ms = 3500},
-    },
-    .finished_clip = 13,
+    .moods = MOODS,
+    .mood_count = 4,
+    .react_clip = 13,
     .sleep_still = 344,
+    .x = 0,
+    .y = 0,
 };

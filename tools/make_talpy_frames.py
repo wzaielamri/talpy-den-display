@@ -176,6 +176,11 @@ static const uint8_t DATA[] = {{"""]
     out.append("};\n\nstatic const talpy_pick_t PICKS[] = {")
     for clip, weight in picks:
         out.append(f"    {{{clip}, {weight}}}, /* {clips[clip][0]} */")
+    out.append("};\n\nstatic const talpy_mood_def_t MOODS[] = {")
+    for mood in MOODS:
+        m = moods[mood]
+        out.append(f"    [TALPY_{mood.upper()}] = {{.rest_clip = {m['rest']}, .first_pick = {m['first_pick']}, "
+                   f".picks = {m['picks']}, .pause_min_ms = {m['pause'][0]}, .pause_max_ms = {m['pause'][1]}}},")
     out.append(f"""}};
 
 const talpy_set_t TALPY_SET = {{
@@ -191,14 +196,12 @@ const talpy_set_t TALPY_SET = {{
     .clip_count = {len(clips)},
     .picks = PICKS,
     .pick_count = {len(picks)},
-    .moods = {{""")
-    for mood in MOODS:
-        m = moods[mood]
-        out.append(f"        [TALPY_{mood.upper()}] = {{.rest_clip = {m['rest']}, .first_pick = {m['first_pick']}, "
-                   f".picks = {m['picks']}, .pause_min_ms = {m['pause'][0]}, .pause_max_ms = {m['pause'][1]}}},")
-    out.append(f"""    }},
-    .finished_clip = {finished},
+    .moods = MOODS,
+    .mood_count = {len(MOODS)},
+    .react_clip = {finished},
     .sleep_still = {sleep_still},
+    .x = 0,
+    .y = 0,
 }};
 """)
     return "\n".join(out)

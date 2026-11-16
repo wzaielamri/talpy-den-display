@@ -9,7 +9,13 @@
 // Each frame is compressed (see talpy_codec.h); a clip is a list of steps (a frame shown for so many ms); each mood
 // has a rest clip looped during its pauses and a weighted pick of clips, as Talpy Den's MOODS.
 
+// The banner set's moods; a set has any number of moods (mood_count), a player's mood is an index into them.
 typedef enum { TALPY_LOADING, TALPY_NEEDS, TALPY_WORKING, TALPY_DONE, TALPY_MOODS } talpy_mood_t;
+// The weather set's moods.
+typedef enum {
+    TW_CLEAR_DAY, TW_PARTLY_DAY, TW_OVERCAST, TW_FOG, TW_DRIZZLE, TW_RAIN, TW_SNOW, TW_THUNDER,
+    TW_CLEAR_NIGHT, TW_PARTLY_NIGHT, TW_PLAIN, TW_HIDDEN, TW_MOODS
+} tw_mood_t;
 
 // into data; check: FNV-1a of the decoded frame
 typedef struct { uint32_t offset, size; uint16_t w, h; uint32_t check; } talpy_frame_t;
@@ -30,11 +36,13 @@ typedef struct {
     const talpy_step_t *steps;   uint16_t step_count;
     const talpy_clip_t *clips;   uint16_t clip_count;
     const talpy_pick_t *picks;   uint16_t pick_count;
-    talpy_mood_def_t moods[TALPY_MOODS];
-    uint16_t finished_clip;              // the reaction
-    uint16_t sleep_still;                // a frame (cropped to itself) for the clock face
+    const talpy_mood_def_t *moods; uint16_t mood_count;
+    uint16_t react_clip;                 // the reaction: the banner's "finished", the weather set's thunder duck
+    uint16_t sleep_still;                // banner only: a frame (cropped to itself) for the clock face; 0xFFFF: none
+    int16_t x, y;                        // where the canvas sits in its scene box
 } talpy_set_t;
 
 extern const talpy_set_t TALPY_SET;
+extern const talpy_set_t TALPY_WEATHER_SET;
 
 #endif

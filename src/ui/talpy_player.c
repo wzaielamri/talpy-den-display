@@ -12,11 +12,14 @@ static uint32_t next_random(talpy_player_t *p) {
     return x;
 }
 
-// Every due time is set at most 65,535 ms ahead (ms and pauses are uint16), so a time further ahead than
-// that is one long past (after a freeze of 24.8 days or more, a signed compare would see it in the future).
+#define PACE_MAX 8
+
+// Every due time is set at most 65,535 × PACE_MAX ms ahead (ms and pauses are uint16, a pause × the pace), so a
+// time further ahead than that is one long past (after a freeze of 24.8 days or more, a signed compare would see
+// it in the future).
 static bool due(uint32_t now, uint32_t when) {
     uint32_t ahead = when - now;
-    return ahead == 0 || ahead > 0xFFFF;
+    return ahead == 0 || ahead > 0xFFFFu * PACE_MAX;
 }
 
 static const talpy_step_t *step_of(const talpy_player_t *p, uint16_t clip, uint16_t step) {
@@ -35,7 +38,7 @@ static void start_rest(talpy_player_t *p, uint32_t now) {
     p->reacting = false;
     p->step = 0;
     p->step_due = now + step_of(p, m->rest_clip, 0)->ms;
-    p->pause_due = now + m->pause_min_ms + next_random(p) % span;
+    p->pause_due = now + (m->pause_min_ms + next_random(p) % span) * p->pace;
 }
 
 // Starts a clip chosen by weight from the mood's picks.
@@ -63,29 +66,41 @@ void talpy_player_init(talpy_player_t *p, const talpy_set_t *set, uint32_t seed,
     p->set = set;
     p->rng = seed ? seed : SEED_FALLBACK;
     p->mood = TALPY_LOADING;
+    p->pace = 1;
     start_rest(p, now_ms);
 }
 
-void talpy_player_set_mood(talpy_player_t *p, talpy_mood_t mood, uint32_t now_ms) {
+void talpy_player_set_mood(talpy_player_t *p, uint16_t mood, uint32_t now_ms) {
     if (mood == p->mood)
         return;
     p->mood = mood;
     start_rest(p, now_ms);
 }
 
-bool talpy_player_react(talpy_player_t *p, uint32_t now_ms) {
-    if (p->mood == TALPY_NEEDS)
+bool talpy_player_play_once(talpy_player_t *p, uint16_t clip, uint32_t now_ms) {
+    if (clip >= p->set->clip_count)
         return false;
-    p->clip = (int16_t)p->set->finished_clip;
-    p->reacting = true;
+    p->clip = (int16_t)clip;
+    p->reacting = false;
     p->step = 0;
-    p->step_due = now_ms + step_of(p, p->set->finished_clip, 0)->ms;
+    p->step_due = now_ms + step_of(p, clip, 0)->ms;
     return true;
+}
+
+bool talpy_player_react(talpy_player_t *p, uint32_t now_ms) {
+    if (p->mood == TALPY_NEEDS || !talpy_player_play_once(p, p->set->react_clip, now_ms))
+        return false;
+    p->reacting = true;
+    return true;
+}
+
+void talpy_player_set_pace(talpy_player_t *p, uint8_t pace) {
+    p->pace = pace < 1 ? 1 : pace > PACE_MAX ? PACE_MAX : pace;
 }
 
 bool talpy_player_tick(talpy_player_t *p, uint32_t now_ms) {
     uint16_t before = talpy_player_frame(p);
-    if (p->clip < 0 && due(now_ms, p->pause_due)) {
+    if (p->clip < 0 && p->set->moods[p->mood].picks && due(now_ms, p->pause_due)) {
         // The pause ends even in the middle of a rest step.
         start_pick(p, now_ms);
     } else if (due(now_ms, p->step_due)) {
