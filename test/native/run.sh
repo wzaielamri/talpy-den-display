@@ -25,5 +25,6 @@ run_test() {
 
 run_test test_codec src/ui/talpy_codec.c
 run_test test_data src/ui/talpy_data.c src/ui/talpy_codec.c
+run_test test_player src/ui/talpy_player.c
 
 exit $failed
