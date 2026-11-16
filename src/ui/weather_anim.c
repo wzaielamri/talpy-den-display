@@ -1,4 +1,4 @@
-// Building blocks shared by the weather icons and the live sky (see weather_anim.h).
+// Building blocks of the live sky; the small weather icons use the group box too (see weather_anim.h).
 
 #include "weather_anim.h"
 
@@ -12,7 +12,6 @@ lv_obj_t *wx_group(lv_obj_t *parent, int x, int y, int w, int h) {
 }
 
 void wx_anim_x(void *obj, int32_t v) { lv_obj_set_x((lv_obj_t *)obj, v); }
-void wx_anim_y(void *obj, int32_t v) { lv_obj_set_y((lv_obj_t *)obj, v); }
 
 void wx_anim_bounce(lv_anim_t *a, void *var, lv_anim_exec_xcb_t cb, int32_t from, int32_t to, uint32_t ms,
                     uint32_t delay) {

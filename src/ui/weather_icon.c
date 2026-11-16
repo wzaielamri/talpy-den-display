@@ -1,13 +1,9 @@
-// Weather icons, built from simple shapes (no image files).
+// Weather icons, built from simple shapes (no image files): the hourly columns' small pictures, standing still.
 //
-// Every icon is drawn inside a 104 x 96 box. All x/y below are inside that box, at that size,
-// with y growing downward. Shapes created later are drawn on top, so:
-//   - drops and the lightning bolt are created BEFORE their cloud: they start hidden behind it
-//     and appear as they fall out underneath;
-//   - the box clips its children, so a drop that falls past y 96 simply disappears.
-//
-// The hourly columns' (and, for now, the clock face's) are these pictures at half size and standing still
-// (weather_icon_small_*): every x, y, w and h goes through S(), which halves it there.
+// Every icon is drawn as if inside a 104 x 96 box, and shown at half size (52 x 48): the x, y, w and h below are
+// at full size (the design page's), and every one goes through S(), which halves it. y grows downward. Shapes
+// created later are drawn on top, so the drops and the lightning bolt, created BEFORE their cloud, show from under
+// it (the cloud hides the bolt's top).
 //
 // To change an icon, edit only its draw_... function.
 
@@ -16,20 +12,17 @@
 #include "ui_common.h"
 #include "weather_anim.h"
 
-#define ICON_W  104
-#define ICON_H  96
-#define DROP_Y0 40 // drops start here, hidden behind a cloud at y 0
+#define ICON_W 104
+#define ICON_H 96
 
 typedef enum { WX_CLEAR, WX_PARTLY, WX_OVERCAST, WX_FOG, WX_DRIZZLE, WX_RAIN, WX_SNOW, WX_THUNDER } wx_kind_t;
 
-// What the draw_... functions draw into: the box, at full size (shrink 1) or half (2), moving or
-// still, and the colour behind it (the moon's cut-out disc must be exactly that to look like a hole).
+// What the draw_... functions draw into: the box, and the colour behind it (the moon's cut-out disc must be exactly
+// that to look like a hole).
 static lv_obj_t *target;
-static int shrink = 1;
-static bool still;
 static uint32_t behind = COLOR_CARD;
 
-#define S(v) ((v) / shrink) // a size or position at the size being drawn
+#define S(v) ((v) / 2) // a size or position at half size
 
 // ---------- WMO weather code -> icon ----------
 
@@ -43,26 +36,6 @@ static wx_kind_t kind_from_wmo(int code) {
     if ((code >= 71 && code <= 77) || code == 85 || code == 86) return WX_SNOW;
     if (code >= 95 && code <= 99) return WX_THUNDER;
     return WX_OVERCAST;                                                 // unknown code: plain cloud
-}
-
-// ---------- animation helpers (the shared ones: weather_anim.c) ----------
-
-static void anim_set_opa(void *obj, int32_t v) { lv_obj_set_style_opa((lv_obj_t *)obj, (lv_opa_t)v, 0); }
-
-// Forever back and forth: from -> to -> from, eased. Drifting clouds, sun glow, twinkling stars.
-// A still icon stays at from.
-static void anim_bounce(lv_obj_t *obj, lv_anim_exec_xcb_t cb, int32_t from, int32_t to, uint32_t ms, uint32_t delay) {
-    if (still) return;
-    lv_anim_t a;
-    wx_anim_bounce(&a, obj, cb, from, to, ms, delay);
-    lv_anim_start(&a);
-}
-
-// Forever falling: y goes from -> to, then jumps back to from. Rain, drizzle, snow.
-static void anim_fall(lv_obj_t *obj, int32_t from, int32_t to, uint32_t ms, uint32_t delay, lv_anim_path_cb_t path) {
-    lv_anim_t a;
-    wx_anim_fall(&a, obj, wx_anim_y, from, to, ms, delay, path);
-    lv_anim_start(&a);
 }
 
 // ---------- building blocks (the invisible group box: wx_group, weather_anim.c) ----------
@@ -83,21 +56,15 @@ static void make_moon(int x, int y, int d, int cut_x, int cut_y, int cut_d) {
     make_blob(target, S(cut_x), S(cut_y), S(cut_d), S(cut_d), LV_RADIUS_CIRCLE, behind);
 }
 
-// Small twinkling dot.
-static void make_star(int x, int y, int d, uint32_t delay) {
-    lv_obj_t *s = make_blob(target, S(x), S(y), S(d), S(d), LV_RADIUS_CIRCLE, COLOR_TEXT);
-    anim_bounce(s, anim_set_opa, LV_OPA_COVER, LV_OPA_20, 1400, delay);
+// Small dot.
+static void make_star(int x, int y, int d) {
+    make_blob(target, S(x), S(y), S(d), S(d), LV_RADIUS_CIRCLE, COLOR_TEXT);
 }
 
-// n drops (or flakes) side by side from x0, dx apart, falling from behind the cloud to the bottom.
-// Their start times are spread over one fall, so they don't all drop together. Still, they hang
-// under the cloud, every other one lower.
-static void make_drops(int n, int x0, int dx, int w, int h, uint32_t color, uint32_t ms, lv_anim_path_cb_t path) {
-    for (int i = 0; i < n; i++) {
-        int y = still ? 62 + (i % 2) * 14 : DROP_Y0;
-        lv_obj_t *d = make_blob(target, S(x0 + i * dx), S(y), S(w), S(h), LV_RADIUS_CIRCLE, color);
-        if (!still) anim_fall(d, S(DROP_Y0), S(ICON_H), ms, (uint32_t)i * ms / n, path);
-    }
+// n drops (or flakes) side by side from x0, dx apart, hanging under the cloud, every other one lower.
+static void make_drops(int n, int x0, int dx, int w, int h, uint32_t color) {
+    for (int i = 0; i < n; i++)
+        make_blob(target, S(x0 + i * dx), S(62 + (i % 2) * 14), S(w), S(h), LV_RADIUS_CIRCLE, color);
 }
 
 // ---------- one function per icon ----------
@@ -106,100 +73,77 @@ static void draw_clear(bool day) {
     if (day) {
         lv_obj_t *glow = make_blob(target, S(12), S(8), S(80), S(80), LV_RADIUS_CIRCLE, COLOR_SUN);
         lv_obj_set_style_opa(glow, LV_OPA_20, 0);
-        anim_bounce(glow, anim_set_opa, LV_OPA_10, LV_OPA_40, 1800, 0); // breathing glow
         make_blob(target, S(22), S(18), S(60), S(60), LV_RADIUS_CIRCLE, COLOR_SUN);
     } else {
         make_moon(24, 20, 56, 42, 10, 46);
-        make_star( 8, 12, 6,    0);
-        make_star(90, 10, 4,  500);
-        make_star(92, 70, 5,  900);
-        make_star(14, 82, 4, 1300);
+        make_star( 8, 12, 6);
+        make_star(90, 10, 4);
+        make_star(92, 70, 5);
+        make_star(14, 82, 4);
     }
 }
 
-// Design page layout: sun (36, 18) behind the cloud (10, 36). The cloud drifts a little.
+// Design page layout: sun (36, 18) behind the cloud (10, 36).
 static void draw_partly(bool day) {
     if (day) {
         make_blob(target, S(36), S(18), S(52), S(52), LV_RADIUS_CIRCLE, COLOR_SUN);
     } else {
         make_moon(44, 12, 44, 60, 6, 36);
-        make_star(16, 14, 5,   0);
-        make_star( 6, 34, 4, 700);
+        make_star(16, 14, 5);
+        make_star( 6, 34, 4);
     }
-    lv_obj_t *cloud = make_cloud(10, 36, COLOR_CLOUD);
-    anim_bounce(cloud, wx_anim_x, S(10), S(4), 3000, 0);
+    make_cloud(10, 36, COLOR_CLOUD);
 }
 
-// Two clouds drifting in opposite directions: a dark one behind, a light one in front.
+// Two clouds: a dark one behind, a light one in front.
 static void draw_overcast(void) {
-    lv_obj_t *back = make_cloud(14, 8, COLOR_MUTED);
-    anim_bounce(back, wx_anim_x, S(14), S(8), 4500, 0);
-    lv_obj_t *front = make_cloud(0, 34, COLOR_CLOUD);
-    anim_bounce(front, wx_anim_x, 0, S(6), 3500, 0);
+    make_cloud(14, 8, COLOR_MUTED);
+    make_cloud(0, 34, COLOR_CLOUD);
 }
 
-// Cloud with three fog bars sliding slowly under it.
+// Cloud with three fog bars under it.
 static void draw_fog(void) {
     make_cloud(10, 0, COLOR_CLOUD);
     //                       x   y   w
     static const int bars[3][3] = {{4, 66, 80}, {20, 77, 76}, {8, 88, 64}};
-    for (int i = 0; i < 3; i++) {
-        lv_obj_t *bar = make_blob(target, S(bars[i][0]), S(bars[i][1]), S(bars[i][2]), S(6), LV_RADIUS_CIRCLE, COLOR_MUTED);
-        anim_bounce(bar, wx_anim_x, S(bars[i][0]), S(bars[i][0] + 8), 2400 + 400 * i, 0);
-    }
+    for (int i = 0; i < 3; i++)
+        make_blob(target, S(bars[i][0]), S(bars[i][1]), S(bars[i][2]), S(6), LV_RADIUS_CIRCLE, COLOR_MUTED);
 }
 
 static void draw_drizzle(void) {
-    make_drops(3, 30, 22, 4, 8, COLOR_RAIN, 1300, lv_anim_path_ease_in); // few, small, slow
+    make_drops(3, 30, 22, 4, 8, COLOR_RAIN); // few, small
     make_cloud(10, 0, COLOR_CLOUD);
 }
 
 static void draw_rain(void) {
-    make_drops(4, 24, 20, 5, 14, COLOR_RAIN, 800, lv_anim_path_ease_in); // speed up as they fall
+    make_drops(4, 24, 20, 5, 14, COLOR_RAIN);
     make_cloud(10, 0, COLOR_CLOUD);
 }
 
 static void draw_snow(void) {
-    make_drops(4, 22, 20, 8, 8, COLOR_TEXT, 2600, lv_anim_path_linear); // round flakes, slow and steady
+    make_drops(4, 22, 20, 8, 8, COLOR_TEXT); // round flakes
     make_cloud(10, 0, COLOR_CLOUD);
 }
 
-// Dark cloud, two drops and a lightning bolt that flashes every few seconds (still: always lit).
+// Dark cloud, two drops and a lightning bolt, lit.
 static void draw_thunder(void) {
-    // (must stay alive: lv_line keeps the pointer; one set per size)
-    static const lv_point_precise_t bolt_points[] = {{14, 0}, {4, 20}, {14, 20}, {2, 42}};
-    static const lv_point_precise_t bolt_half[] = {{7, 0}, {2, 10}, {7, 10}, {1, 21}};
+    // (must stay alive: lv_line keeps the pointer; at half size already)
+    static const lv_point_precise_t bolt_points[] = {{7, 0}, {2, 10}, {7, 10}, {1, 21}};
     lv_obj_t *bolt = lv_line_create(target);
-    lv_line_set_points(bolt, shrink == 1 ? bolt_points : bolt_half, 4);
+    lv_line_set_points(bolt, bolt_points, 4);
     lv_obj_set_pos(bolt, S(46), S(44));
-    lv_obj_set_style_line_width(bolt, shrink == 1 ? 5 : 3, 0);
+    lv_obj_set_style_line_width(bolt, 3, 0);
     lv_obj_set_style_line_color(bolt, lv_color_hex(COLOR_SUN), 0);
     lv_obj_set_style_line_rounded(bolt, true, 0);
 
-    if (!still) {
-        lv_obj_set_style_opa(bolt, LV_OPA_TRANSP, 0);
-        lv_anim_t a;
-        lv_anim_init(&a);
-        lv_anim_set_var(&a, bolt);
-        lv_anim_set_exec_cb(&a, anim_set_opa);
-        lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
-        lv_anim_set_duration(&a, 80);           // flash on fast
-        lv_anim_set_playback_duration(&a, 240); // fade out
-        lv_anim_set_repeat_delay(&a, 2400);     // dark pause between flashes
-        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-        lv_anim_start(&a);
-    }
-
-    make_drops(2, 22, 58, 5, 14, COLOR_RAIN, 800, lv_anim_path_ease_in);
+    make_drops(2, 22, 58, 5, 14, COLOR_RAIN);
     make_cloud(10, 0, COLOR_MUTED);
 }
 
-// Clean box and draw the icon of code there, at that size, moving or not, on that background.
-static void draw_into(lv_obj_t *box, int size_shrink, bool is_still, uint32_t bg, wx_kind_t kind, bool day) {
-    lv_obj_clean(box); // delete the old shapes; LVGL stops their animations with them
+// Clean box and draw the icon of kind there, on that background.
+static void draw_into(lv_obj_t *box, uint32_t bg, wx_kind_t kind, bool day) {
+    lv_obj_clean(box); // delete the old shapes
     target = box;
-    shrink = size_shrink;
-    still = is_still;
     behind = bg;
     switch (kind) {
     case WX_CLEAR:    draw_clear(day);  break;
@@ -227,5 +171,5 @@ lv_obj_t *weather_icon_small_create(lv_obj_t *parent) {
 void weather_icon_small_set(lv_obj_t *box, int wmo_code, bool is_day, uint32_t bg) {
     if (!box) return;
     wx_kind_t kind = kind_from_wmo(wmo_code);
-    draw_into(box, 2, true, bg, kind, day_for(kind, is_day));
+    draw_into(box, bg, kind, day_for(kind, is_day));
 }

@@ -15,7 +15,6 @@ extern "C" {
 void weather_state_weather(const weather_update_t *w); // a weather message (copied)
 void weather_state_hourly(const hourly_update_t *u);   // an hourly message (copied; the first HOURLY_COLS hours)
 void weather_state_pc(bool online);                    // the PC came or went
-void weather_state_tick(void);                         // recompute now (the timer calls it each minute)
 
 #ifdef __cplusplus
 } /*extern "C"*/

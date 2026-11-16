@@ -64,5 +64,3 @@ void weather_state_pc(bool online) {
     pc_online = online;
     push();
 }
-
-void weather_state_tick(void) { push(); }
