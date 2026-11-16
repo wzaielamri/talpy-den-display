@@ -128,7 +128,7 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
   its own canvas and checks (budget, size), and the native data test covers it.
 - Moves with Talpy Den equivalents use them (sip: `coffee`; shiver: `shiver`; duck/peek: depth `hidden`/`peek`; sleep's
   "z"); the others (glasses glint, umbrella twirl, sway) are new poses/steps in the tool.
-- Two more pictures for the clock face: Talpy **hidden** in his burrow (Talpy Den's depth `hidden`: only his antenna light
+- Two more pictures (for the PC away and no weather): Talpy **hidden** in his burrow (Talpy Den's depth `hidden`: only his antenna light
   shows), and his **plain** rest pose with no prop (connected, no weather).
 
 ### The sky
@@ -151,22 +151,32 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
 - **A calm sky** (the owner's choice): the same motion as the card's, thinned — fewer drops and flakes, still falling at
   their normal speed (slow rain reads as snow), lightning about once a minute (Talpy ducks with it), stars twinkling and
   clouds drifting slowly.
-- **What weather it shows** (the owner's choice for old or missing weather):
-
-  | The PC | Weather known | Sky and temperature | Talpy |
-  |---|---|---|---|
-  | connected | the last weather message | that weather | out, with that weather's prop |
-  | connected | none yet (or none ever: no location set) | no sky, no temperature | out, his plain rest pose (no prop) |
-  | offline (the board's existing rule: no message for 60 s, or `power: sleep`) | the hourly forecast has the current hour | that hour's code, `day` and temperature, from the 8 hours the board already holds (`card_hourly`'s data) | **hidden in his burrow, only his antenna light showing**, so it's clear the PC isn't connected |
-  | offline | no forecast hour for now (more than 8 h after the last forecast, or none) | no sky, no temperature | hidden in his burrow |
-
-  The forecast hour is chosen by the board's clock and updates on the hour; "PC offline" shows under it as now. When the
-  PC comes back, the face goes back to the current weather and Talpy comes out.
+- What weather it shows: see "When the PC is away" below (the same rules as the card).
 - Under it, a short muted line with the chats' state: the banner's headline (`banner_headline()`: "All quiet",
   "2 finished chats", "1 chat working", …), updated when the jobs change, **hidden while the PC is offline** (its counts
   would be stale); "PC offline" stays as now.
 - The face still shifts a few pixels each minute. Only one weather Talpy animates at a time: the card's is frozen while
   the clock shows (MOTION_CLOCK), the clock's runs only while the clock shows.
+
+### When the PC is away (the weather card and the clock face)
+
+The owner's choice for old or missing weather, for **both** weather Talpys (the card's, seen when you tap the clock
+away while the PC is off, and the clock face's):
+
+| The PC | Weather known | Sky, temperature, text | Talpy |
+|---|---|---|---|
+| connected | the last weather message | that weather, as today | out, with that weather's prop |
+| connected | none yet (or none ever: no location set) | no sky, no temperature; the card says "Waiting for PC" as today | out, his plain rest pose (no prop) |
+| offline (the board's existing rule: no message for 60 s, or `power: sleep`) | the hourly forecast has the current hour | that hour's code, `day` and temperature, from the 8 hours the board already holds (`card_hourly`'s data) | **hidden in his burrow, only his antenna light showing**, so it's clear the PC isn't connected |
+| offline | no forecast hour for now (more than 8 h after the last forecast, or none) | no sky, no temperature | hidden in his burrow |
+
+- The forecast hour is chosen by the board's clock and moves on at each hour. When the PC comes back, both go back to
+  the current weather and Talpy comes out.
+- On the card, while it follows the forecast: the big temperature and the condition text ("Light rain") are that
+  hour's; the bottom line says it's the forecast, e.g. "Forecast " LV_SYMBOL_BULLET " 18:00" in place of
+  "Open-Meteo · 14:45"; the high/low stay as last received (hidden as "--" once the date has changed since). With no
+  forecast hour left: "--°" and "PC offline" as the condition. The hourly view (tap the card) is unchanged.
+- On the clock face: "PC offline" shows under it as now.
 
 ### Docs
 
@@ -181,8 +191,9 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
   "at least one pick" becomes per set); how `talpy.c` takes a set instead of the hard-wired `TALPY_SET`; how the clock
   face's slower pace comes from the same set (e.g. a per-instance pause factor; pauses are `uint16` ms, so ≤ 65.5 s);
   whether the weather widget is a new file or grows `weather_icon.c`.
-- How the clock face gets the hourly forecast and the PC's state (today `serial_link.cpp` passes the hourly data to
-  `card_hourly` and the PC's state to `clock_face_set_pc`).
+- How the card and the clock face get the hourly forecast and the PC's state (today `serial_link.cpp` passes the hourly
+  data to `card_hourly` and the PC's state to `clock_face_set_pc`); where the "which weather now" rule lives (one place
+  for both, ideally pure C with a native test).
 - The sky's exact layout per weather, within the round-3 sizes; whether rain stopping at the canopy is a clip region or
   per-drop end height.
 - Placement of the chat line and the weather row on the clock face, within its current column.
