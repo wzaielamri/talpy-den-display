@@ -15,6 +15,7 @@
 #include "weather_icon.h"
 #include "theme.h"
 #include "ui_common.h"
+#include "weather_anim.h"
 
 #define ICON_W  104
 #define ICON_H  96
@@ -50,10 +51,8 @@ static wx_kind_t kind_from_wmo(int code) {
     return WX_OVERCAST;                                                 // unknown code: plain cloud
 }
 
-// ---------- animation helpers ----------
+// ---------- animation helpers (the shared ones: weather_anim.c) ----------
 
-static void anim_set_x(void *obj, int32_t v) { lv_obj_set_x((lv_obj_t *)obj, v); }
-static void anim_set_y(void *obj, int32_t v) { lv_obj_set_y((lv_obj_t *)obj, v); }
 static void anim_set_opa(void *obj, int32_t v) { lv_obj_set_style_opa((lv_obj_t *)obj, (lv_opa_t)v, 0); }
 
 // Forever back and forth: from -> to -> from, eased. Drifting clouds, sun glow, twinkling stars.
@@ -61,47 +60,22 @@ static void anim_set_opa(void *obj, int32_t v) { lv_obj_set_style_opa((lv_obj_t 
 static void anim_bounce(lv_obj_t *obj, lv_anim_exec_xcb_t cb, int32_t from, int32_t to, uint32_t ms, uint32_t delay) {
     if (still) return;
     lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, obj);
-    lv_anim_set_exec_cb(&a, cb);
-    lv_anim_set_values(&a, from, to);
-    lv_anim_set_duration(&a, ms);
-    lv_anim_set_playback_duration(&a, ms);
-    lv_anim_set_delay(&a, delay);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    wx_anim_bounce(&a, obj, cb, from, to, ms, delay);
     lv_anim_start(&a);
 }
 
 // Forever falling: y goes from -> to, then jumps back to from. Rain, drizzle, snow.
 static void anim_fall(lv_obj_t *obj, int32_t from, int32_t to, uint32_t ms, uint32_t delay, lv_anim_path_cb_t path) {
     lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, obj);
-    lv_anim_set_exec_cb(&a, anim_set_y);
-    lv_anim_set_values(&a, from, to);
-    lv_anim_set_duration(&a, ms);
-    lv_anim_set_delay(&a, delay);
-    lv_anim_set_path_cb(&a, path);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    wx_anim_fall(&a, obj, wx_anim_y, from, to, ms, delay, path);
     lv_anim_start(&a);
 }
 
-// ---------- building blocks ----------
-
-// Invisible box (no background, border, padding) that holds shapes so they move as one piece.
-static lv_obj_t *make_group(lv_obj_t *parent, int x, int y, int w, int h) {
-    lv_obj_t *g = lv_obj_create(parent);
-    lv_obj_remove_style_all(g);
-    lv_obj_set_size(g, w, h);
-    lv_obj_set_pos(g, x, y);
-    lv_obj_remove_flag(g, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    return g;
-}
+// ---------- building blocks (the invisible group box: wx_group, weather_anim.c) ----------
 
 // The design page's cloud (pill + two puffs) in an 88 x 60 box.
 static lv_obj_t *make_cloud(int x, int y, uint32_t color) {
-    lv_obj_t *cloud = make_group(target, S(x), S(y), S(88), S(60));
+    lv_obj_t *cloud = wx_group(target, S(x), S(y), S(88), S(60));
     //               x      y      w      h      radius            color
     make_blob(cloud, 0,     S(26), S(88), S(34), S(17),            color); // cloud_base
     make_blob(cloud, S(12), S(10), S(40), S(40), LV_RADIUS_CIRCLE, color); // cloud_a
@@ -159,15 +133,15 @@ static void draw_partly(bool day) {
         make_star( 6, 34, 4, 700);
     }
     lv_obj_t *cloud = make_cloud(10, 36, COLOR_CLOUD);
-    anim_bounce(cloud, anim_set_x, S(10), S(4), 3000, 0);
+    anim_bounce(cloud, wx_anim_x, S(10), S(4), 3000, 0);
 }
 
 // Two clouds drifting in opposite directions: a dark one behind, a light one in front.
 static void draw_overcast(void) {
     lv_obj_t *back = make_cloud(14, 8, COLOR_MUTED);
-    anim_bounce(back, anim_set_x, S(14), S(8), 4500, 0);
+    anim_bounce(back, wx_anim_x, S(14), S(8), 4500, 0);
     lv_obj_t *front = make_cloud(0, 34, COLOR_CLOUD);
-    anim_bounce(front, anim_set_x, 0, S(6), 3500, 0);
+    anim_bounce(front, wx_anim_x, 0, S(6), 3500, 0);
 }
 
 // Cloud with three fog bars sliding slowly under it.
@@ -177,7 +151,7 @@ static void draw_fog(void) {
     static const int bars[3][3] = {{4, 66, 80}, {20, 77, 76}, {8, 88, 64}};
     for (int i = 0; i < 3; i++) {
         lv_obj_t *bar = make_blob(target, S(bars[i][0]), S(bars[i][1]), S(bars[i][2]), S(6), LV_RADIUS_CIRCLE, COLOR_MUTED);
-        anim_bounce(bar, anim_set_x, S(bars[i][0]), S(bars[i][0] + 8), 2400 + 400 * i, 0);
+        anim_bounce(bar, wx_anim_x, S(bars[i][0]), S(bars[i][0] + 8), 2400 + 400 * i, 0);
     }
 }
 
@@ -253,7 +227,7 @@ static bool day_for(wx_kind_t kind, bool is_day) {
 // ---------- public ----------
 
 void weather_icon_create(lv_obj_t *parent, int x, int y) {
-    wx_icon = make_group(parent, x, y, ICON_W, ICON_H);
+    wx_icon = wx_group(parent, x, y, ICON_W, ICON_H);
 }
 
 void weather_icon_set(int wmo_code, bool is_day) {
@@ -274,7 +248,7 @@ void weather_icon_freeze(bool frozen) {
 }
 
 lv_obj_t *weather_icon_small_create(lv_obj_t *parent) {
-    return make_group(parent, 0, 0, ICON_W / 2, ICON_H / 2);
+    return wx_group(parent, 0, 0, ICON_W / 2, ICON_H / 2);
 }
 
 void weather_icon_small_set(lv_obj_t *box, int wmo_code, bool is_day, uint32_t bg) {
