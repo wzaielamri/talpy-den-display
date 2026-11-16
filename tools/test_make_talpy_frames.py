@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from make_talpy_frames import encode_frame, rgb565a8  # noqa: E402
+from make_talpy_frames import SETS, encode_frame, placement, rgb565a8  # noqa: E402
 
 
 class EncodeFrameTest(unittest.TestCase):
@@ -27,6 +27,16 @@ class EncodeFrameTest(unittest.TestCase):
 class Rgb565a8Test(unittest.TestCase):
     def test_rgb565a8_layout(self):
         self.assertEqual(rgb565a8([(0x1234, 0x80), (0, 0)]), bytes([0x34, 0x12, 0, 0, 0x80, 0]))
+
+
+class PlacementTest(unittest.TestCase):
+    def test_banner_at_origin(self):
+        self.assertEqual(placement(SETS["banner"], (10, 20, 106, 124)), (0, 0))
+
+    def test_weather_from_scene_box_corner(self):
+        # the scene box's corner (-14, -22) is (26, 18) units into the SVG: 28.6, 19.8 px at 1.1 px per unit
+        self.assertEqual(placement(SETS["weather"], (49, 48, 113, 113)), (20, 28))
+        self.assertEqual(placement(SETS["weather"], (29, 20, 60, 60)), (0, 0))
 
 
 if __name__ == "__main__":

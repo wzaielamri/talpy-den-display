@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""Make Talpy's frames for the display (src/ui/talpy_data.c) from Talpy Den's own drawing code.
+"""Make Talpy's frames for the display from Talpy Den's own drawing code: the banner's (src/ui/talpy_data.c) or the
+weather Talpy's (src/ui/talpy_weather_data.c).
 
-tools/talpy_draw.mjs runs Talpy Den's code (seeded random, fixed clock) and draws every picture as
-SVG. This rasterises them with rsvg-convert at 1.3 px per box unit, crops every frame the player
-shows to one canvas (the union of what they all draw; the clock face's sleeping still is cropped
-to itself), and stores them as RGB565A8 frames, run-length encoded as talpy_decode reads them
-(src/ui/talpy_codec.c), with each mood's rest clip, clips, weights and pauses (src/ui/talpy_set.h).
-Identical frames are stored once. The same Talpy Den checkout gives a byte-identical file.
+tools/talpy_draw.mjs runs Talpy Den's code (seeded random, fixed clock) and draws every picture of the set as SVG.
+This rasterises them with rsvg-convert (the banner at 1.3 px per box unit, the weather Talpy at 1.1), crops every
+frame the player shows to one canvas (the union of what they all draw; the banner's clock face sleeping still is
+cropped to itself), and stores them as RGB565A8 frames, run-length encoded as talpy_decode reads them
+(src/ui/talpy_codec.c), with each mood's rest clip, clips, weights and pauses (src/ui/talpy_set.h). Identical frames
+are stored once. The same Talpy Den checkout gives a byte-identical file.
 
     python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_data.c [--sheet PATH] [--pngs DIR]
+    python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_weather_data.c --set weather [--sheet PATH]
 
 It also writes a contact sheet (every clip a row of its frames) to PATH, by default a temp file,
-and prints where. With --pngs DIR it also writes transparent PNGs at the board's scale for the layout
+and prints where. With --pngs DIR (banner only) it also writes transparent PNGs at the board's scale for the layout
 spec (design/desk-display-layout.html): each mood's rest frame (rest-<mood>.png), the middle frame of
 the sign clip (sign.png) and of the finished reaction (finished.png), and the sleeping still
-(sleep-still.png). It fails if the canvas is taller than 112 px or the frames take more than
-2,000,000 bytes. Needs node, rsvg-convert and Pillow (python3-pillow).
+(sleep-still.png). The banner fails if its canvas is taller than 112 px or the frames take more than 2,000,000 bytes;
+the weather Talpy if his canvas leaves the weather card's 104 x 96 scene box or the frames take more than 800,000
+bytes. Needs node, rsvg-convert and Pillow (python3-pillow).
 """
 import argparse
 import json
@@ -28,13 +31,35 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 HERE = Path(__file__).resolve().parent
-SCALE = 1.3                      # px per box unit, everywhere
-SIZE = int(144 * SCALE)          # the SVGs' viewBox is 144 box units square
-MAX_H = 112                      # the banner is 116 px with a 2 px border
-MAX_BYTES = 2_000_000
-MOODS = ("loading", "needs", "working", "done")   # talpy_mood_t order
+VIEWBOX = (-40, 144)             # the SVGs' viewBox: from (-40, -40), 144 box units square
 SHEET_BG = "#171B22"
 SHEET_PER_LINE = 16              # frames on one line of the contact sheet
+
+# The sets: what talpy_draw.mjs draws for each, and what the C file is called and checked against
+SETS = {
+    "banner": {
+        "title": "talpy_data.c: Talpy's frames for the display",
+        "name": "TALPY_SET",
+        "enum": "TALPY_",
+        "moods": ("loading", "needs", "working", "done"),   # talpy_mood_t order
+        "scale": 1.3,            # px per box unit
+        "max_h": 112,            # the banner is 116 px with a 2 px border
+        "max_bytes": 2_000_000,
+    },
+    "weather": {
+        "title": "talpy_weather_data.c: the weather Talpy's frames for the display",
+        "name": "TALPY_WEATHER_SET",
+        "enum": "TW_",
+        "moods": ("clear_day", "partly_day", "overcast", "fog", "drizzle", "rain", "snow", "thunder",
+                  "clear_night", "partly_night", "plain", "hidden"),   # tw_mood_t order
+        "scale": 1.1,            # the mockups' (smaller than the banner's: the sky has room around him)
+        # the weather card's scene box, 104 x 96 px, is the mockups' viewBox -14 -22 95 88 (box units): the canvas
+        # must sit inside it
+        "box": (104, 96),
+        "box_origin": (-14, -22),
+        "max_bytes": 800_000,
+    },
+}
 
 OP_TRANSPARENT_MAX = 128         # 0x00..0x7F: op + 1 transparent pixels
 OP_REPEAT = 0x80                 # 0x80..0xBF: op - 0x80 + 1 copies of one pixel
@@ -96,13 +121,13 @@ def to_pixels(im):
             for r, g, b, a in zip(raw[0::4], raw[1::4], raw[2::4], raw[3::4])]
 
 
-def rasterise(svg):
+def rasterise(svg, size):
     png = svg.with_suffix(".png")
-    subprocess.run(["rsvg-convert", "-w", str(SIZE), "-h", str(SIZE), "-o", str(png), str(svg)], check=True)
+    subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), "-o", str(png), str(svg)], check=True)
     with Image.open(png) as im:
         im = im.convert("RGBA")
     box = im.getchannel("A").getbbox()
-    if box and (box[0] == 0 or box[1] == 0 or box[2] == SIZE or box[3] == SIZE):
+    if box and (box[0] == 0 or box[1] == 0 or box[2] == size or box[3] == size):
         sys.exit(f"{svg.name}: the drawing reaches the edge of the SVG's viewBox (it would be cut off)")
     return im, box
 
@@ -153,8 +178,8 @@ def write_pngs(folder, clips, crops, still):
     still.save(folder / "sleep-still.png")
 
 
-def c_file(commit, data, frames, steps, clips, picks, moods, finished, sleep_still, w, h, frame_names):
-    out = [f"""/* talpy_data.c: Talpy's frames for the display (talpy_set.h), drawn by Talpy Den's own code.
+def c_file(cfg, commit, data, frames, steps, clips, picks, moods, react, sleep_still, w, h, x, y, frame_names):
+    out = [f"""/* {cfg['title']} (talpy_set.h), drawn by Talpy Den's own code.
  * Generated by tools/make_talpy_frames.py from Talpy Den commit {commit}: do not edit, make it again. */
 #include "talpy_set.h"
 
@@ -177,13 +202,13 @@ static const uint8_t DATA[] = {{"""]
     for clip, weight in picks:
         out.append(f"    {{{clip}, {weight}}}, /* {clips[clip][0]} */")
     out.append("};\n\nstatic const talpy_mood_def_t MOODS[] = {")
-    for mood in MOODS:
+    for mood in cfg["moods"]:
         m = moods[mood]
-        out.append(f"    [TALPY_{mood.upper()}] = {{.rest_clip = {m['rest']}, .first_pick = {m['first_pick']}, "
+        out.append(f"    [{cfg['enum']}{mood.upper()}] = {{.rest_clip = {m['rest']}, .first_pick = {m['first_pick']}, "
                    f".picks = {m['picks']}, .pause_min_ms = {m['pause'][0]}, .pause_max_ms = {m['pause'][1]}}},")
     out.append(f"""}};
 
-const talpy_set_t TALPY_SET = {{
+const talpy_set_t {cfg['name']} = {{
     .data = DATA,
     .data_size = {len(data)},
     .w = {w},
@@ -197,37 +222,57 @@ const talpy_set_t TALPY_SET = {{
     .picks = PICKS,
     .pick_count = {len(picks)},
     .moods = MOODS,
-    .mood_count = {len(MOODS)},
-    .react_clip = {finished},
+    .mood_count = {len(cfg['moods'])},
+    .react_clip = {react},
     .sleep_still = {sleep_still},
-    .x = 0,
-    .y = 0,
+    .x = {x},
+    .y = {y},
 }};
 """)
     return "\n".join(out)
 
 
+def placement(cfg, box):
+    """Where the canvas (box: its place in the rasterised SVG) sits in the set's scene box, as (x, y) px: (0, 0) for
+    the banner; for the weather Talpy, from the scene box's top-left (in box units) at the set's scale."""
+    if "box" not in cfg:
+        return 0, 0
+    ox, oy = ((o - VIEWBOX[0]) * cfg["scale"] for o in cfg["box_origin"])
+    return round(box[0] - ox), round(box[1] - oy)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("talpy_den", help="a Talpy Den checkout")
-    ap.add_argument("out", help="the C file to write (src/ui/talpy_data.c)")
-    ap.add_argument("--pngs", help="a folder for transparent PNGs: the rest frames, a sign frame, a finished frame, the sleep still")
+    ap.add_argument("out", help="the C file to write (src/ui/talpy_data.c, src/ui/talpy_weather_data.c)")
+    ap.add_argument("--set", choices=sorted(SETS), default="banner", help="which pictures (default: banner)")
+    ap.add_argument("--pngs", help="banner: a folder for transparent PNGs: the rest frames, a sign frame, a finished frame, "
+                                   "the sleep still")
     ap.add_argument("--sheet", help="where the contact sheet goes (default: a temp file)")
     args = ap.parse_args()
+    cfg = SETS[args.set]
+    if args.pngs and args.set != "banner":
+        ap.error("--pngs is for the banner set")
+    size = int(VIEWBOX[1] * cfg["scale"])
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        if subprocess.run(["node", str(HERE / "talpy_draw.mjs"), args.talpy_den, str(tmp)]).returncode:
+        if subprocess.run(["node", str(HERE / "talpy_draw.mjs"), args.talpy_den, str(tmp), args.set]).returncode:
             sys.exit("tools/talpy_draw.mjs failed (is the first argument a Talpy Den checkout?)")
         manifest = json.loads((tmp / "manifest.json").read_text())
+        if sorted(manifest["moods"]) != sorted(cfg["moods"]):
+            sys.exit(f"tools/talpy_draw.mjs drew the moods {', '.join(manifest['moods'])}, not {', '.join(cfg['moods'])}")
         clips = manifest["clips"]
-        pictures = {f["file"]: rasterise(tmp / f["file"]) for c in clips for f in c["frames"]}
-        still_im, still_box = rasterise(tmp / manifest["sleep_still"])
+        pictures = {f["file"]: rasterise(tmp / f["file"], size) for c in clips for f in c["frames"]}
+        still = None
+        if manifest["sleep_still"]:
+            still_im, still_box = rasterise(tmp / manifest["sleep_still"], size)
+            still = still_im.crop(still_box)
 
     box = union(b for _, b in pictures.values())
     w, h = box[2] - box[0], box[3] - box[1]
+    x, y = placement(cfg, box)
     crops = {file: im.crop(box) for file, (im, _) in pictures.items()}
-    still = still_im.crop(still_box)
 
     if args.sheet:
         sheet = Path(args.sheet)
@@ -237,9 +282,12 @@ def main():
         sheet = Path(name)
     # (the sleep still is the done mood's rest still, so it fits the canvas too)
     contact_sheet([(f"{c['name']} ({c['kind']}, {len(c['frames'])})", [crops[f["file"]] for f in c["frames"]])
-                   for c in clips] + [("sleep_still", [still])], w, h, sheet)
-    if h > MAX_H:
-        sys.exit(f"the canvas is {w} x {h} px: taller than {MAX_H} (contact sheet: {sheet})")
+                   for c in clips] + ([("sleep_still", [still])] if still else []), w, h, sheet)
+    if "max_h" in cfg and h > cfg["max_h"]:
+        sys.exit(f"the canvas is {w} x {h} px: taller than {cfg['max_h']} (contact sheet: {sheet})")
+    if "box" in cfg and not (x >= 0 and y >= 0 and x + w <= cfg["box"][0] and y + h <= cfg["box"][1]):
+        sys.exit(f"the canvas is {w} x {h} px at ({x}, {y}): it leaves the {cfg['box'][0]} x {cfg['box'][1]} scene box "
+                 f"(contact sheet: {sheet})")
 
     if args.pngs:
         write_pngs(Path(args.pngs), clips, crops, still)
@@ -263,25 +311,26 @@ def main():
         for f in c["frames"]:
             steps.append((add_frame(crops[f["file"]], f["file"][:-4]), f["ms"]))
         clip_rows.append((c["name"], first, len(c["frames"])))
-    for mood in MOODS:
+    for mood in cfg["moods"]:
         mine = [i for i, c in enumerate(clips) if c["mood"] == mood]
         rest = [i for i in mine if clips[i]["kind"] == "rest"]
         picked = [(i, manifest["moods"][mood]["weights"][clips[i]["name"]]) for i in mine if clips[i]["kind"] == "clip"]
         moods[mood] = {"rest": rest[0], "first_pick": len(picks), "picks": len(picked),
                        "pause": manifest["moods"][mood]["pause"]}
         picks += picked
-    finished = next(i for i, c in enumerate(clips) if c["kind"] == "reaction")
-    sleep_still = add_frame(still, manifest["sleep_still"][:-4])
+    react = next(i for i, c in enumerate(clips) if c["kind"] == "reaction")
+    sleep_still = add_frame(still, manifest["sleep_still"][:-4]) if still else "0xFFFF"
 
-    if len(data) > MAX_BYTES:
-        sys.exit(f"the frames take {len(data)} bytes: more than {MAX_BYTES} (contact sheet: {sheet})")
+    if len(data) > cfg["max_bytes"]:
+        sys.exit(f"the frames take {len(data)} bytes: more than {cfg['max_bytes']} (contact sheet: {sheet})")
     assert len(frames) < 65536 and len(steps) < 65536 and all(ms < 65536 for _, ms in steps)
 
-    Path(args.out).write_text(c_file(manifest["talpy_den"], data, frames, steps, clip_rows, picks, moods, finished,
-                                     sleep_still, w, h, frame_names))
-    print(f"{args.out}: {len(frames)} frames ({len(steps)} steps in {len(clip_rows)} clips, and the sleep still "
-          f"{still.width} x {still.height}), canvas {w} x {h} px, {len(data)} bytes compressed, "
-          f"from Talpy Den {manifest['talpy_den']}")
+    Path(args.out).write_text(c_file(cfg, manifest["talpy_den"], data, frames, steps, clip_rows, picks, moods, react,
+                                     sleep_still, w, h, x, y, frame_names))
+    extra = f", and the sleep still {still.width} x {still.height}" if still else ""
+    where = f" at ({x}, {y}) in the {cfg['box'][0]} x {cfg['box'][1]} scene box" if "box" in cfg else ""
+    print(f"{args.out}: {len(frames)} frames ({len(steps)} steps in {len(clip_rows)} clips{extra}), canvas {w} x {h} px"
+          f"{where} at {cfg['scale']} px per unit, {len(data)} bytes compressed, from Talpy Den {manifest['talpy_den']}")
     print(f"contact sheet: {sheet}")
 
 
