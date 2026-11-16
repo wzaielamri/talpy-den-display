@@ -46,6 +46,7 @@ lv_obj_t *weather_talpy_create(lv_obj_t *parent, bool calm) {
     if (w->sky) weather_sky_on_flash(w->sky, on_flash, w);
     lv_obj_set_user_data(box, w);
     lv_obj_add_event_cb(box, on_delete, LV_EVENT_DELETE, w);
+    weather_talpy_set(box, TW_PLAIN, TW_PLAIN); // start as plain Talpy, no sky (not the set's first mood)
     return box;
 }
 

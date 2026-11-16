@@ -154,7 +154,7 @@ void card_weather_create(lv_obj_t *parent){
     lv_obj_t *wx_more = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "Hourly " LV_SYMBOL_RIGHT);
     lv_obj_align(wx_more, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
-    // Top-right corner, above the condition text: Talpy in front of his sky (plain Talpy till the first picture).
+    // Top-right corner, above the condition text: Talpy in front of his sky (it starts as plain Talpy, no sky).
     wx_talpy = weather_talpy_create(parent, false);
     lv_obj_set_pos(wx_talpy, 140, 0);
 
