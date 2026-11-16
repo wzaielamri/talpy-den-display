@@ -34,7 +34,11 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 - **Plan usage:** the 5-hour and 7-day windows of up to two accounts, with their reset times. As in
   Talpy Den, a bar is green, orange from 70% and red from 90%.
 - **Weather:** now, today's high and low, and the next 8 hours with rain chances, from
-  [Open-Meteo](https://open-meteo.com/) (no API key needed).
+  [Open-Meteo](https://open-meteo.com/) (no API key needed). Talpy acts out the weather: sunglasses in
+  the sun, an umbrella in the rain, a beanie and scarf in the snow, asleep under the moon, ducked into
+  his burrow in a thunderstorm. He stands in front of a live sky that moves with the weather (ten
+  pictures in all), calmer than the banner's Talpy. While the PC is away, the card follows the
+  forecast for the current hour and Talpy hides in his burrow, with only his antenna light showing.
 - **Brightness:** swipe down from the top for the brightness slider and a **Stay on** toggle. The
   board remembers both after a restart. Between about 12% and 99% the backlight hums quietly: its
   controller dims it by switching it on and off at an audible rate, which the code can't change.
@@ -42,8 +46,9 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
   to 10%. It doesn't switch while a chat is working or waiting, or while Stay on is set. It also
   shows the clock while the PC is away (no message for 60 s), so a board on a powered hub can stay on
   day and night. The clock moves a few pixels each minute so nothing burns in. Double-tap the screen
-  (anywhere but the weather card) to show it right away. Touch it to come back. Talpy sleeps on it
-  as one still picture: nothing on the clock face moves.
+  (anywhere but the weather card) to show it right away. Touch it to come back. It shows the time,
+  the date, the weather (a slower weather Talpy and the temperature) and a line about your chats
+  ("All quiet", "2 finished chats"). While the PC is away, the chat line gives way to "PC offline".
 
 ## Hardware
 
@@ -137,13 +142,15 @@ position, size, colour, font and state, with the LVGL calls behind them. Downloa
 a browser (it loads its fonts from Google Fonts). The screenshots above are exported from it.
 
 Talpy is drawn by Talpy Den's own drawing code, not redrawn by hand. To make his frames again, you
-need a Talpy Den checkout next to this one, node, `rsvg-convert` and Pillow:
+need a Talpy Den checkout next to this one, node, `rsvg-convert` and Pillow. There are two sets, the
+banner's and the weather's:
 
 ```sh
 python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_data.c
+python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_weather_data.c --set weather
 ```
 
-The result, `src/ui/talpy_data.c`, is committed, so building the board needs none of this. On the same
+The results, `src/ui/talpy_data.c` and `src/ui/talpy_weather_data.c`, are committed, so building the board needs none of this. On the same
 machine the same checkout gives the same file (the z's use the system's sans-serif through
 rsvg/fontconfig, and the output depends on the rsvg version). Add `--pngs DIR` to also write the
 pictures the layout spec uses.
@@ -156,7 +163,7 @@ Pillow):
 python3 tools/make_clock_font.py .pio/libdeps/advance-hmi/lvgl/scripts/built_in_font/Montserrat-Medium.ttf 128 src/ui/font_clock_128.c
 ```
 
-The tests that run on your PC, with no board (the banner's texts, Talpy's frame decoder and player):
+The tests that run on your PC, with no board (the banner's texts, Talpy's frame decoder and player, the weather Talpy's choice of picture):
 
 ```sh
 sh test/native/run.sh
@@ -168,8 +175,9 @@ python3 -m unittest tools/test_make_talpy_frames.py   # the frame tool
 ```
 src/main.cpp     setup and the main loop
 src/app/         serial messages, alerts from job changes, when the clock shows, saved settings
-src/ui/          cards, pull-down panel, alert, clock face, weather icons (LVGL 9.1)
+src/ui/          cards, pull-down panel, alert, clock face, weather Talpy and sky (LVGL 9.1)
 src/ui/talpy*    Talpy: the widget, the frame decoder and player, and the generated frames
+src/ui/weather_*  the weather Talpy, his sky and the weather view
 src/drivers/     display, touch, backlight, real-time clock
 include/         lv_conf.h, theme colours, pins
 host/            sync.py, the udev rule, the systemd user service
@@ -182,7 +190,7 @@ tools/           the clock font and Talpy frame generators, and the frame tool's
 
 Built with [LVGL](https://lvgl.io/), [LovyanGFX](https://github.com/lovyan03/LovyanGFX),
 [ArduinoJson](https://arduinojson.org/) and [pioarduino](https://github.com/pioarduino/platform-espressif32).
-Talpy is Talpy Den's mole, drawn by its drawing code (same author, MIT). The board setup (pins, panel
+Talpy is Talpy Den's mole, drawn by its drawing code (same author, MIT), and so is his mug in the weather scenes. The board setup (pins, panel
 timings, backlight controller) follows Elecrow's CrowPanel examples. The clock digits come from [Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License
 1.1). Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Claude is a trademark of
 Anthropic, which this project isn't affiliated with.
