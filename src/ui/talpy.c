@@ -20,7 +20,9 @@ typedef struct {
 static void show_frame(talpy_t *t, uint16_t i) {
     const talpy_frame_t *f = &TALPY_SET.frames[i];
     if (!talpy_decode(TALPY_SET.data + f->offset, f->size, f->w, f->h, t->buf)) {
-        printf("talpy: frame %u doesn't decode\n", (unsigned)i);
+        static bool told; // once for all widgets: a frame that keeps failing must not flood the UART
+        if (!told) printf("talpy: frame %u doesn't decode\n", (unsigned)i);
+        told = true;
         return;
     }
     lv_image_cache_drop(&t->dsc);
