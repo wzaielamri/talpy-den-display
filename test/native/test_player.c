@@ -29,10 +29,12 @@ static const talpy_mood_def_t moods[] = {
     [TALPY_MOODS] = {2, 0, 0, 500, 1500},     // 4: no picks, rests forever
     [TALPY_MOODS + 1] = {2, 2, 2, 9000, 9000}, // 5: long pauses
     [TALPY_MOODS + 2] = {2, 2, 2, 1000, 1000}, // 6: pause exactly 1000
+    [TALPY_MOODS + 3] = {2, 2, 2, 20000, 20000}, // 7: pause exactly 20 s
 };
 #define M_NOPICKS TALPY_MOODS
 #define M_LONG (TALPY_MOODS + 1)
 #define M_ONE (TALPY_MOODS + 2)
+#define M_20S (TALPY_MOODS + 3)
 static const talpy_set_t set = {
     .w = 10,
     .h = 10,
@@ -43,7 +45,7 @@ static const talpy_set_t set = {
     .picks = picks,
     .pick_count = 5,
     .moods = moods,
-    .mood_count = 7,
+    .mood_count = 8,
     .react_clip = 6,
 };
 
@@ -303,6 +305,23 @@ static void test_slow_pace_not_overdue(void) {
     CHECK(run_to_clip(&p, &now, 100));
 }
 
+// A paced pause longer than 65,535 ms (20 s x pace 8 = 160 s) is not taken for one long past.
+static void test_max_pace_long_pause_not_overdue(void) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 1, 0);
+    talpy_player_set_pace(&p, 8);
+    talpy_player_set_mood(&p, M_20S, 0);
+    uint32_t now = 0;
+    bool early = false;
+    for (; now < 160000; now += 10) {
+        talpy_player_tick(&p, now);
+        if (talpy_player_frame(&p) != 2)
+            early = true;
+    }
+    CHECK(!early);
+    CHECK(run_to_clip(&p, &now, 100));
+}
+
 static void pace_clip_time(uint8_t pace, uint32_t expect) {
     talpy_player_t p;
     talpy_player_init(&p, &set, 1, 0);
@@ -327,6 +346,7 @@ int main(void) {
     test_play_once_bad_clip();
     test_mood_without_picks_rests();
     test_slow_pace_not_overdue();
+    test_max_pace_long_pause_not_overdue();
     test_pace_clamped();
     test_init_rests_in_loading();
     test_zero_seed_not_stuck();
