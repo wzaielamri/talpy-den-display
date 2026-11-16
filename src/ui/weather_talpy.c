@@ -13,7 +13,6 @@ typedef struct {
     bool calm;
     bool have;       // something has been set
     tw_mood_t talpy_mood;
-    tw_mood_t sky_mood;
 } wt_t;
 
 static void on_delete(lv_event_t *e) { free(lv_event_get_user_data(e)); }
@@ -54,10 +53,10 @@ void weather_talpy_set(lv_obj_t *box, tw_mood_t talpy, tw_mood_t sky) {
     wt_t *w = box ? (wt_t *)lv_obj_get_user_data(box) : NULL;
     if (!w) return;
     if (!w->have || talpy != w->talpy_mood) talpy_set_mood(w->talpy, talpy);
-    if (w->sky && (!w->have || sky != w->sky_mood)) weather_sky_set(w->sky, sky, w->calm);
+    // (the sky keeps running if it already shows this: the same weather, and Talpy out or in his burrow as before)
+    if (w->sky) weather_sky_set(w->sky, sky, w->calm, talpy != TW_HIDDEN);
     w->have = true;
     w->talpy_mood = talpy;
-    w->sky_mood = sky;
 }
 
 void weather_talpy_freeze(lv_obj_t *box, bool on) {

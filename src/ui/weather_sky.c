@@ -11,8 +11,8 @@
 // The draw_... functions pass compose.py's own numbers; ux(), uy() and us() turn them into px. The building blocks
 // (clouds, sun, moon, stars, drops, the lightning) are in weather_sky_parts.c.
 //
-// Animations are lv_anims on the shapes, as in weather_icon.c. Each sky keeps a list of the ones it started, so freeze
-// can stop them where they are (keeping a copy of each) and start the copies again later, going on from there.
+// Animations are lv_anims on the shapes. Each sky keeps a list of the ones it started, so freeze can stop them where
+// they are (keeping a copy of each) and start the copies again later, going on from there.
 //
 // To change a sky, edit only its draw_... function.
 
@@ -24,8 +24,8 @@
 
 #define COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
 
-// Falls from above the box (its top at -h) to below it (its top at 96), at today's weather icon speeds: there rain
-// fell 56 px in 800 ms, drizzle in 1300 ms, snow in 2600 ms.
+// Falls from above the box (its top at -h) to below it (its top at 96), at the speeds of the old animated weather
+// icon: there rain fell 56 px in 800 ms, drizzle in 1300 ms, snow in 2600 ms.
 #define FALL_MS(h, ms_per_56) ((uint32_t)((BOX_H + (h)) * (ms_per_56) / 56))
 
 // ---------- Talpy, measured ----------
@@ -40,8 +40,14 @@
 //   DRIZZLE: the brims x 28..36 and 63..71, their top 62 over most of them (61..65 from the crown to the tips).
 //   SNOW: the pompom's top 44..45 (x 38..42), the beanie's 45..47 (x 43..48), the mound 75..85 at the sides.
 //   THUNDER (peeking): the lamp's top 49 (x 49..57), his head 67..74 beside it, the mound 80..85.
-#define LAMP_X 53 // the lamp's pixel
-#define LAMP_Y 42
+// And on the TW_HIDDEN frame (Talpy down in his burrow while the PC is away; it doesn't move), the same way: the
+// "burrow" stop lines in the tables below.
+//   The mound, x 20..79 (nothing past it: 96): its top 85 at x 20, 80..84 at x 21..35, 78..79 at x 36..49 and
+//   58..63, 80..81 at x 64..74, 83..85 at x 75..79; the lamp peeking out of it 74..76 at x 50..57.
+//   The lamp: the same light as out, 35 px lower (its yellow core x 51..56, y 75..80, centring at (53.6, 77.9)).
+#define LAMP_X        53 // the lamp's pixel
+#define LAMP_Y        42 // Talpy out
+#define BURROW_LAMP_Y 77 // Talpy down in his burrow
 
 // ---------- one function per sky ----------
 
@@ -62,26 +68,29 @@ static void draw_overcast(weather_sky_t *s) {
 }
 
 // 4 Fog: compose's BEAM and FOG. The beam and the glow sit on Talpy's lamp (measured), behind him; the five bands
-// in front of him.
+// in front of him. Talpy down in his burrow: only the glow, on the lamp peeking out of it (the beam, from down there,
+// would shine below the burrow, into the ground).
 #define BEAM_R     56 // past the box's right edge at the beam's spread: the edge cuts the slice straight, as in compose
 #define BAND_DRIFT 6
 static void draw_fog(weather_sky_t *s) {
-    // The beam: compose's triangle from the lamp to the right edge (18 units up and down over 47: +-21 degrees), 12 %,
-    // as a pie slice (an arc as wide as its radius).
-    lv_obj_t *beam = lv_arc_create(s->back);
-    lv_obj_remove_style_all(beam);
-    lv_obj_remove_flag(beam, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_pos(beam, LAMP_X - BEAM_R, LAMP_Y - BEAM_R);
-    lv_obj_set_size(beam, 2 * BEAM_R, 2 * BEAM_R);
-    lv_arc_set_bg_angles(beam, 339, 21);
-    lv_obj_set_style_arc_width(beam, BEAM_R, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(beam, lv_color_hex(BEAM_COLOR), LV_PART_MAIN);
-    lv_obj_set_style_arc_opa(beam, OPA(12), LV_PART_MAIN);
-    lv_obj_set_style_arc_rounded(beam, false, LV_PART_MAIN);
+    if (s->talpy_out) {
+        // The beam: compose's triangle from the lamp to the right edge (18 units up and down over 47: +-21 degrees),
+        // 12 %, as a pie slice (an arc as wide as its radius).
+        lv_obj_t *beam = lv_arc_create(s->back);
+        lv_obj_remove_style_all(beam);
+        lv_obj_remove_flag(beam, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_pos(beam, LAMP_X - BEAM_R, LAMP_Y - BEAM_R);
+        lv_obj_set_size(beam, 2 * BEAM_R, 2 * BEAM_R);
+        lv_arc_set_bg_angles(beam, 339, 21);
+        lv_obj_set_style_arc_width(beam, BEAM_R, LV_PART_MAIN);
+        lv_obj_set_style_arc_color(beam, lv_color_hex(BEAM_COLOR), LV_PART_MAIN);
+        lv_obj_set_style_arc_opa(beam, OPA(12), LV_PART_MAIN);
+        lv_obj_set_style_arc_rounded(beam, false, LV_PART_MAIN);
+    }
 
     // The glow: compose's r 8 at 30 %, here on the lamp and r 12 px so it shows around the lamp's own 7 px ring,
     // breathing between 20 and 40 % over 2.6 s each way.
-    lv_obj_t *glow = sky_disc(s->back, LAMP_X, LAMP_Y, 12, BEAM_COLOR, OPA(20));
+    lv_obj_t *glow = sky_disc(s->back, LAMP_X, s->talpy_out ? LAMP_Y : BURROW_LAMP_Y, 12, BEAM_COLOR, OPA(20));
     lv_anim_t a;
     wx_anim_bounce(&a, glow, sky_anim_bg_opa, OPA(20), OPA(40), PACE(s, 2600), 0);
     sky_start(s, &a);
@@ -102,15 +111,18 @@ static void draw_fog(weather_sky_t *s) {
     }
 }
 
+// The drop and flake tables: x, then where each stops with Talpy out, then with him down in his burrow (measured,
+// above).
+
 // 5 Drizzle: compose cloud(60, -8, 1.55) and 6 light drops (compose drops(..., 1.2): 2.9 x 6.2 units -> 3 x 7 px),
 // two of them landing on the hat's brims. Calm: the first 3.
 static const drop_t DRIZZLE_DROPS[] = {
-    {67, 62, true},  // from the cloud onto the right brim
-    { 9, 96, false},
-    {88, 96, true},
-    {33, 62, false}, // onto the left brim
-    {75, 81, true},  // the mound
-    {99, 96, true},
+    {67, 62, 80, true},  // from the cloud onto the right brim; the mound
+    { 9, 96, 96, false},
+    {88, 96, 96, true},
+    {33, 62, 80, false}, // onto the left brim; the mound
+    {75, 81, 81, true},  // the mound
+    {99, 96, 96, true},
 };
 static void draw_drizzle(weather_sky_t *s) {
     int bottom;
@@ -119,18 +131,19 @@ static void draw_drizzle(weather_sky_t *s) {
 }
 
 // 6 Rain: compose cloud(62, -10, 1.55) and 10 drops (compose drops(..., 1.3): 3.1 x 6.8 units -> 3 x 8 px, a little
-// longer for the speed), at today's rain speed, those over Talpy stopping at the umbrella's canopy. Calm: the first 5.
+// longer for the speed), at rain speed, those over Talpy stopping at the umbrella's canopy (in his burrow: at the
+// mound and the lamp). Calm: the first 5.
 static const drop_t RAIN_DROPS[] = {
-    {75, 34, true},  // from the cloud onto the canopy
-    {99, 96, true},
-    {38, 33, false}, // canopy
-    { 5, 96, false},
-    {84, 96, true},  // just past the canopy's right rim
-    {50, 30, false}, // canopy
-    {91, 96, true},
-    {14, 96, false},
-    {62, 30, false}, // canopy
-    {26, 80, false}, // the mound, left of the canopy
+    {75, 34, 81, true},  // from the cloud onto the canopy; the mound
+    {99, 96, 96, true},
+    {38, 33, 78, false}, // canopy; the mound
+    { 5, 96, 96, false},
+    {84, 96, 96, true},  // just past the canopy's right rim
+    {50, 30, 75, false}, // canopy; the lamp
+    {91, 96, 96, true},
+    {14, 96, 96, false},
+    {62, 30, 78, false}, // canopy; the mound
+    {26, 80, 80, false}, // the mound, left of the canopy
 };
 static void draw_rain(weather_sky_t *s) {
     int bottom;
@@ -139,37 +152,37 @@ static void draw_rain(weather_sky_t *s) {
 }
 
 // 7 Snow: compose's 10 flakes (r 1.9-2.6 units -> 4-6 px), no cloud, falling slowly and steadily from above the box,
-// those over Talpy settling on the beanie, his head or the mound. Calm: the first 5.
-typedef struct { int16_t x, stop, d; } flake_t; // centre x, stop line, diameter (px)
+// those over Talpy settling on the beanie, his head or the mound (in his burrow: the mound). Calm: the first 5.
+typedef struct { int16_t x, stop, burrow, d; } flake_t; // centre x, stop lines (as drop_t's), diameter (px)
 static const flake_t SNOW_FLAKES[] = {
-    {45, 45, 5}, // the beanie
-    {92, 96, 6},
-    {15, 96, 4},
-    {72, 75, 5}, // the mound
-    {26, 79, 6}, // the mound
-    {62, 51, 5}, // the beanie
-    { 5, 96, 4},
-    {83, 96, 5},
-    {38, 44, 5}, // the pompom
-    {100, 96, 4},
+    {45, 45, 79, 5}, // the beanie; the mound
+    {92, 96, 96, 6},
+    {15, 96, 96, 4},
+    {72, 75, 80, 5}, // the mound
+    {26, 79, 80, 6}, // the mound
+    {62, 51, 78, 5}, // the beanie; the mound
+    { 5, 96, 96, 4},
+    {83, 96, 96, 5},
+    {38, 44, 78, 5}, // the pompom; the mound
+    {100, 96, 96, 4},
 };
 static void draw_snow(weather_sky_t *s) {
     const int n = s->calm ? (COUNT(SNOW_FLAKES) + 1) / 2 : COUNT(SNOW_FLAKES);
     const uint32_t ms = FALL_MS(5, 2600);
     for (int i = 0; i < n; i++) {
         const flake_t *f = &SNOW_FLAKES[i];
-        sky_faller(s, s->front, 0, f->x - f->d / 2, f->d, f->d, f->stop, SNOW_COLOR, ms, (uint32_t)i * ms / (uint32_t)n,
-                   lv_anim_path_linear);
+        sky_faller(s, s->front, 0, f->x - f->d / 2, f->d, f->d, s->talpy_out ? f->stop : f->burrow, SNOW_COLOR, ms,
+                   (uint32_t)i * ms / (uint32_t)n, lv_anim_path_linear);
     }
 }
 
 // 8 Thunderstorm: compose's storm cloud(62, -10, 1.8) with the bolt under it, hidden, flashing now and then (and
 // calling the flash callback), and 4 drops on the left (compose drops(..., 1.2) -> 3 x 7 px). Calm: 2 drops.
 static const drop_t THUNDER_DROPS[] = {
-    {35, 72, false}, // his head (peeking)
-    { 9, 96, false},
-    {44, 67, false}, // his head
-    {20, 84, false}, // the mound
+    {35, 72, 79, false}, // his head (peeking); the mound
+    { 9, 96, 96, false},
+    {44, 67, 79, false}, // his head; the mound
+    {20, 84, 84, false}, // the mound
 };
 static void draw_thunder(weather_sky_t *s) {
     sky_cloud(s->back, 62, -10, 1.8f, COLOR_DIM, STORM_EDGE, NULL);
@@ -210,8 +223,13 @@ weather_sky_t *weather_sky_create(lv_obj_t *back, lv_obj_t *front) {
     return s;
 }
 
-void weather_sky_set(weather_sky_t *s, tw_mood_t sky, bool calm) {
-    if (!s || (sky == s->shown && calm == s->calm))
+// The skies drawn around Talpy: drops and flakes stopping on him, the fog lamp's glow and beam.
+static bool follows_talpy(tw_mood_t sky) {
+    return sky == TW_FOG || sky == TW_DRIZZLE || sky == TW_RAIN || sky == TW_SNOW || sky == TW_THUNDER;
+}
+
+void weather_sky_set(weather_sky_t *s, tw_mood_t sky, bool calm, bool talpy_out) {
+    if (!s || (sky == s->shown && calm == s->calm && (talpy_out == s->talpy_out || !follows_talpy(sky))))
         return; // the same sky: keep it running
     lv_obj_clean(s->back); // delete the old shapes; LVGL deletes their animations with them
     lv_obj_clean(s->front);
@@ -219,6 +237,7 @@ void weather_sky_set(weather_sky_t *s, tw_mood_t sky, bool calm) {
     s->lit = false;
     s->shown = sky;
     s->calm = calm;
+    s->talpy_out = talpy_out;
     switch (sky) {
     case TW_CLEAR_DAY:    draw_clear_day(s);    break;
     case TW_PARTLY_DAY:   draw_partly_day(s);   break;

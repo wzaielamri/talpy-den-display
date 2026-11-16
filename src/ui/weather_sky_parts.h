@@ -41,6 +41,7 @@ struct weather_sky {
     lv_obj_t *back, *front;
     tw_mood_t shown; // the sky drawn (TW_PLAIN: none)
     bool calm;
+    bool talpy_out; // drawn for Talpy out; false: for Talpy down in his burrow (TW_HIDDEN)
     bool frozen;
     bool lit; // the lightning is showing (its callback was called for this flash)
     void (*flash_cb)(void *user);
@@ -86,11 +87,11 @@ void sky_star(weather_sky_t *s, float x, float y, float k, float o, uint32_t ms,
 void sky_faller(weather_sky_t *s, lv_obj_t *parent, int oy, int x, int w, int h, int stop, uint32_t color, uint32_t ms,
                 uint32_t delay, lv_anim_path_cb_t path);
 
-// A drop: its centre x, the line its bottom stops at (box px), and whether it falls from behind the sky's cloud
-// (showing only under it) or from above the box.
-typedef struct { int16_t x, stop; bool cloud; } drop_t;
-// n drops of w x h (calm: the first half), ms a fall, speeding up. cloud_bottom: the first row under the cloud the
-// cloud drops come out of (0: none).
+// A drop: its centre x, the line its bottom stops at (box px) with Talpy out and with Talpy down in his burrow, and
+// whether it falls from behind the sky's cloud (showing only under it) or from above the box.
+typedef struct { int16_t x, stop, burrow; bool cloud; } drop_t;
+// n drops of w x h (calm: the first half), ms a fall, speeding up, each stopping at its line for the Talpy the sky
+// is drawn for. cloud_bottom: the first row under the cloud the cloud drops come out of (0: none).
 void sky_drops(weather_sky_t *s, const drop_t *t, int n, int w, int h, uint32_t ms, int cloud_bottom);
 
 // compose.py's lightning bolt in the back box, hidden, flashing now and then (8-15 s; calm 50-70 s) and calling

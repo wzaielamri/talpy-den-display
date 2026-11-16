@@ -15,6 +15,8 @@ extern "C" {
 lv_obj_t *weather_talpy_create(lv_obj_t *parent, bool calm);
 
 // Show this Talpy mood and sky, at once. The same as shown: nothing. At a thunderstorm Talpy ducks at each flash.
+// talpy TW_HIDDEN (down in his burrow): the sky's drops and flakes stop on the burrow, the fog's lamp glow sits on
+// the lamp peeking out of it.
 void weather_talpy_set(lv_obj_t *w, tw_mood_t talpy, tw_mood_t sky);
 
 // on: Talpy and the sky stop where they are; off: they go on.

@@ -199,8 +199,9 @@ void sky_drops(weather_sky_t *s, const drop_t *t, int n, int w, int h, uint32_t 
     lv_obj_t *under = cloud_bottom > 0 ? wx_group(s->front, 0, cloud_bottom, BOX_W, BOX_H - cloud_bottom) : NULL;
     for (int i = 0; i < n; i++) {
         const bool from_cloud = t[i].cloud && under;
-        sky_faller(s, from_cloud ? under : s->front, from_cloud ? cloud_bottom : 0, t[i].x - w / 2, w, h, t[i].stop,
-                   DROP_COLOR, ms, (uint32_t)i * ms / (uint32_t)n, lv_anim_path_ease_in);
+        sky_faller(s, from_cloud ? under : s->front, from_cloud ? cloud_bottom : 0, t[i].x - w / 2, w, h,
+                   s->talpy_out ? t[i].stop : t[i].burrow, DROP_COLOR, ms, (uint32_t)i * ms / (uint32_t)n,
+                   lv_anim_path_ease_in);
     }
 }
 
