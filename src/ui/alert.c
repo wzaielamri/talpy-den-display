@@ -1,4 +1,5 @@
 #include "alert.h"
+#include "motion.h"
 #include "talpy.h"
 #include "theme.h"
 #include "ui_common.h"
@@ -6,13 +7,15 @@
 #define DONE_HIDE_MS 15000 // a "finished" alert goes by itself after this long
 
 // Why a screen of its own: on lv_layer_top() over a see-through dim, LVGL kept drawing the main screen
-// under it, its animations (the weather icon, the waiting tile) too, blending the dim over them again on
+// under it, its animations (the weather icon, the jobs banner) too, blending the dim over them again on
 // every frame: they showed through and flickered. With its own screen loaded, nothing of the main screen
-// is drawn while the alert shows (its animations go on, unseen), and the main screen comes back as it was.
+// is drawn while the alert shows (its animations are held meanwhile: MOTION_ALERT), and the main screen
+// comes back as it was.
 static lv_obj_t *alert_scr; // NULL until the first alert
 static lv_obj_t *back_to;   // the screen it took the place of
 static lv_obj_t *box, *al_talpy, *al_kicker, *al_name, *al_detail, *ok;
 static bool showing;
+static bool shade_out; // the pull-down shade is out: it can be over this screen too, so Talpy holds still
 static alert_kind_t shown_kind;
 static lv_timer_t *done_timer;
 
@@ -25,6 +28,16 @@ static void done_timeout(lv_timer_t *timer) {
     LV_UNUSED(timer);
     done_timer = NULL; // (a one-shot timer: LVGL deletes it after this)
     alert_hide();
+}
+
+// Talpy moves only while the alert shows and nothing dims it.
+static void update_motion(void) {
+    if (al_talpy) talpy_freeze(al_talpy, shade_out || !showing);
+}
+
+void alert_motion_hold(bool out) {
+    shade_out = out;
+    update_motion();
 }
 
 // Made the first time an alert shows, then kept for the next one.
@@ -96,14 +109,14 @@ bool alert_show(alert_kind_t kind, const char *kicker, const char *name, const c
     lv_label_set_text(al_detail, detail ? detail : "");
     shown_kind = kind;
 
-    // Done first, then the reaction: it is ignored while the mood is NEEDS, so a done alert after a waiting one plays it.
+    // Done first, then the reaction: it is ignored while the mood is NEEDS, so a done alert after a waiting
+    // one plays it.
     if (kind == ALERT_DONE) {
         talpy_set_mood(al_talpy, TALPY_DONE);
         talpy_react_finished(al_talpy);
     } else {
         talpy_set_mood(al_talpy, TALPY_NEEDS);
     }
-    talpy_freeze(al_talpy, false);
 
     // A finished job's alert goes by itself; a waiting one stays.
     if (done_timer) {
@@ -117,6 +130,8 @@ bool alert_show(alert_kind_t kind, const char *kicker, const char *name, const c
 
     if (!showing) {
         showing = true;
+        update_motion();
+        motion_hold(MOTION_ALERT, true);
         back_to = lv_screen_active();
         lv_screen_load(alert_scr);
     }
@@ -130,6 +145,7 @@ void alert_hide(void) {
         lv_timer_delete(done_timer);
         done_timer = NULL;
     }
-    talpy_freeze(al_talpy, true);
+    update_motion();
+    motion_hold(MOTION_ALERT, false);
     if (back_to) lv_screen_load(back_to);
 }

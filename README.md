@@ -143,8 +143,10 @@ need a Talpy Den checkout next to this one, node, `rsvg-convert` and Pillow:
 python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_data.c
 ```
 
-The result, `src/ui/talpy_data.c`, is committed, so building the board needs none of this. The same
-checkout always gives the same file. Add `--pngs DIR` to also write the pictures the layout spec uses.
+The result, `src/ui/talpy_data.c`, is committed, so building the board needs none of this. On the same
+machine the same checkout gives the same file (the z's use the system's sans-serif through
+rsvg/fontconfig, and the output depends on the rsvg version). Add `--pngs DIR` to also write the
+pictures the layout spec uses.
 
 The clock's digits are Montserrat Medium at 128 px. LVGL's built-in fonts stop at 48 px, so
 [`tools/make_clock_font.py`](tools/make_clock_font.py) generates `src/ui/font_clock_128.c` (needs
@@ -180,8 +182,8 @@ tools/           the clock font and Talpy frame generators, and the frame tool's
 
 Built with [LVGL](https://lvgl.io/), [LovyanGFX](https://github.com/lovyan03/LovyanGFX),
 [ArduinoJson](https://arduinojson.org/) and [pioarduino](https://github.com/pioarduino/platform-espressif32).
-Talpy is Talpy Den's mole, drawn by its drawing code (same author, MIT). The board setup (pins, panel timings, backlight controller) follows Elecrow's CrowPanel examples. The
-clock digits come from [Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License
+Talpy is Talpy Den's mole, drawn by its drawing code (same author, MIT). The board setup (pins, panel
+timings, backlight controller) follows Elecrow's CrowPanel examples. The clock digits come from [Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License
 1.1). Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Claude is a trademark of
 Anthropic, which this project isn't affiliated with.
 

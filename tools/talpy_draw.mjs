@@ -51,6 +51,7 @@ const FAR = 1e9;
 // Copied from Talpy Den's tools/talpy_icons.mjs (same author, MIT License): a stand-in for a canvas
 // that records what Talpy draws, every point already moved by the transform, as SVG paths. One
 // change: fillText writes SVG text, where the original draws nothing (sleep's and nap's z's are text).
+// The z's use the system's sans-serif (rsvg/fontconfig), so the pictures are the same only on the same machine.
 
 const num = v => +v.toFixed(2);
 
@@ -236,7 +237,7 @@ function clip(mood, name) {
 
 function commit() {
     try {
-        return execFileSync('git', ['-C', den, 'rev-parse', '--short', 'HEAD'],
+        return execFileSync('git', ['-C', den, 'rev-parse', '--short=8', 'HEAD'],
                             { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     } catch {
         return 'unknown';

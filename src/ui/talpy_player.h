@@ -22,9 +22,12 @@ typedef struct {
     uint32_t pause_due; // while resting: when the next clip starts
 } talpy_player_t;
 
-void talpy_player_init(talpy_player_t *p, const talpy_set_t *set, uint32_t seed, uint32_t now_ms); // TALPY_LOADING, resting
-void talpy_player_set_mood(talpy_player_t *p, talpy_mood_t mood, uint32_t now_ms); // same mood: nothing; else rest of the new mood, a new pause, a reaction stops
-bool talpy_player_react(talpy_player_t *p, uint32_t now_ms); // starts finished_clip; false and nothing while mood is TALPY_NEEDS
+// TALPY_LOADING, resting
+void talpy_player_init(talpy_player_t *p, const talpy_set_t *set, uint32_t seed, uint32_t now_ms);
+// Same mood: nothing; else rest of the new mood, a new pause, a reaction stops.
+void talpy_player_set_mood(talpy_player_t *p, talpy_mood_t mood, uint32_t now_ms);
+// Starts finished_clip; false and nothing while mood is TALPY_NEEDS.
+bool talpy_player_react(talpy_player_t *p, uint32_t now_ms);
 bool talpy_player_tick(talpy_player_t *p, uint32_t now_ms);  // true if the frame to show changed
 uint16_t talpy_player_frame(const talpy_player_t *p);        // index into set->frames
 

@@ -177,13 +177,15 @@ As Talpy Den's `petMood` for the big Talpy, and its `MOODS[...].calm` pools:
 
 ### The tool that makes the pictures
 
-- `tools/make_talpy_frames.mjs` (node), run by hand, like the clock font tool:
-  `node tools/make_talpy_frames.mjs ../talpy-den src/ui/talpy_frames.c`
-- It imports Talpy Den's `talpy.mjs` from the checkout given, plays each clip of the table above at
+- As built: `tools/talpy_draw.mjs` (node, draws the frames as SVG) and `tools/make_talpy_frames.py`
+  (runs it, rasterises, encodes, writes `src/ui/talpy_data.c`, a C array: the builder's choice the
+  spec allowed), run by hand, like the clock font tool:
+  `python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_data.c`
+- The node part imports Talpy Den's `talpy.mjs` from the checkout given, plays each clip of the table above at
   a fixed step (100 ms), draws each frame, compresses it, and writes the frames plus, per clip, the
   frame order and each frame's duration, and a header.
 - Repeatable: `Math.random` is replaced by a seeded generator, so the same Talpy Den gives the same
-  output. The output names the Talpy Den commit it was made from.
+  output on the same machine (the z's use the system's sans-serif, and the output depends on the rsvg version). The output names the Talpy Den commit it was made from.
 - Uses only what's installed: node, rsvg-convert, Python with Pillow. No npm packages. (A probe of
   this, rendering frames through a copy of talpy_icons.mjs's `SvgContext` and rsvg-convert, worked.)
 - The output is committed, so `pio run` doesn't need the tool. Keep it compact in git: a binary blob

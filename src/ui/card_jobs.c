@@ -28,7 +28,7 @@ static lv_obj_t *banner_headline_label;
 static lv_obj_t *banner_talpy;
 static lv_obj_t *jb_updated;
 static lv_obj_t *jb_more;
-static lv_obj_t *jb_empty; // in the rows' place: "Waiting for the PC", then "No jobs right now" while none
+static lv_obj_t *jb_empty; // in the rows' place: "No jobs right now" while none
 static count_pair_t pair_wait, pair_work, pair_done;
 static job_row_t rows[JOBS_ROWS];
 
@@ -256,7 +256,8 @@ static void make_banner(lv_obj_t *parent) {
     // Fixed one-line height: LONG_DOT only adds "..." when the text overflows the height. The width stops
     // short of Talpy.
     banner_headline_label = make_label(banner, &lv_font_montserrat_24, COLOR_TEXT, "");
-    lv_obj_set_size(banner_headline_label, 432 - 16 - TALPY_SET.w - 16, lv_font_get_line_height(&lv_font_montserrat_24));
+    lv_obj_set_size(banner_headline_label, 432 - 16 - TALPY_SET.w - 16,
+                    lv_font_get_line_height(&lv_font_montserrat_24));
     lv_label_set_long_mode(banner_headline_label, LV_LABEL_LONG_DOT);
     lv_obj_align(banner_headline_label, LV_ALIGN_TOP_LEFT, 16, 14);
 

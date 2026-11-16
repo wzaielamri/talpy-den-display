@@ -565,7 +565,7 @@ rows.filter(r => r.s === "alert").forEach(r => {
   if (c.text === "local • 14:52") c.text = "local • 14:58";
   if (c.id === "al_talpy") {
     c.src = "finished";
-    c.note = "Finished: Talpy's “finished” reaction (a jump, confetti), shown here at its peak; then he sits asleep (the done mood) for the rest of the 15 s. Played again for each finished alert (talpy_react_finished), unless the mood is needs.";
+    c.note = "Finished: Talpy's “finished” reaction (a jump, confetti), shown here at its peak; then he sits asleep (the done mood) for the rest of the 15 s. Played again for each finished alert (talpy_react_finished; alert_show sets the done mood first, so it always plays).";
   }
   if (c.style) c.style = JSON.parse(JSON.stringify(c.style).split(col("wait")).join(col("done")));
   rows.push(c);

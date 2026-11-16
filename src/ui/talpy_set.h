@@ -11,10 +11,11 @@
 
 typedef enum { TALPY_LOADING, TALPY_NEEDS, TALPY_WORKING, TALPY_DONE, TALPY_MOODS } talpy_mood_t;
 
-typedef struct { uint32_t offset, size; uint16_t w, h; uint32_t check; } talpy_frame_t; // into data; check: FNV-1a of the decoded frame
-typedef struct { uint16_t frame; uint16_t ms; } talpy_step_t;                          // show frame for ms
-typedef struct { uint16_t first_step, steps; } talpy_clip_t;                            // steps[first_step .. +steps)
-typedef struct { uint16_t clip; uint16_t weight; } talpy_pick_t;                        // weight: Talpy Den's weight × 10
+// into data; check: FNV-1a of the decoded frame
+typedef struct { uint32_t offset, size; uint16_t w, h; uint32_t check; } talpy_frame_t;
+typedef struct { uint16_t frame; uint16_t ms; } talpy_step_t;    // show frame for ms
+typedef struct { uint16_t first_step, steps; } talpy_clip_t;      // steps[first_step .. +steps)
+typedef struct { uint16_t clip; uint16_t weight; } talpy_pick_t;  // weight: Talpy Den's weight × 10
 typedef struct {
     uint16_t rest_clip;                  // looped during pauses
     uint16_t first_pick, picks;          // picks[first_pick .. +picks)

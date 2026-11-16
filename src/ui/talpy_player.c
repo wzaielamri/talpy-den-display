@@ -12,8 +12,11 @@ static uint32_t next_random(talpy_player_t *p) {
     return x;
 }
 
+// Every due time is set at most 65,535 ms ahead (ms and pauses are uint16), so a time further ahead than
+// that is one long past (after a freeze of 24.8 days or more, a signed compare would see it in the future).
 static bool due(uint32_t now, uint32_t when) {
-    return (int32_t)(now - when) >= 0;
+    uint32_t ahead = when - now;
+    return ahead == 0 || ahead > 0xFFFF;
 }
 
 static const talpy_step_t *step_of(const talpy_player_t *p, uint16_t clip, uint16_t step) {

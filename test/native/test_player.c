@@ -200,6 +200,24 @@ static void test_long_freeze_advances_one_step(void) {
     CHECK(!"no seed picked clip A");
 }
 
+// A freeze of 30 days (2^31 ms is 24.8 days): the due time is far behind, not in the future.
+static void test_30_day_freeze_still_moves(void) {
+    talpy_player_t p;
+    talpy_player_init(&p, &set, 5, 0);
+    talpy_player_set_mood(&p, TALPY_WORKING, 0);
+    uint32_t now = 0;
+    CHECK(run_to_clip(&p, &now, 1600));
+    uint32_t late = now + 30u * 24 * 3600 * 1000;
+    talpy_player_tick(&p, late); // (a clip step, or a new pause: either way it moves on)
+    uint16_t seen = talpy_player_frame(&p);
+    bool moved = false;
+    for (uint32_t t = late; t <= late + 5000; t += 10) {
+        talpy_player_tick(&p, t);
+        if (talpy_player_frame(&p) != seen) moved = true;
+    }
+    CHECK(moved);
+}
+
 static void test_millis_wrap(void) {
     talpy_player_t p;
     uint32_t now = 0xFFFFFF00u; // 256 ms before the wrap; the shortest pause (500 ms) ends after it
@@ -248,6 +266,7 @@ int main(void) {
     test_react_plays_then_back_to_mood();
     test_mood_change_cancels_reaction();
     test_long_freeze_advances_one_step();
+    test_30_day_freeze_still_moves();
     test_millis_wrap();
     return check_failures() ? 1 : 0;
 }

@@ -110,8 +110,8 @@ void clock_face_create(lv_obj_t *screen) {
     lv_obj_add_event_cb(face, face_pressed, LV_EVENT_PRESSED, NULL);
 
     // Spec: one column, centred, 16 px apart: the time (font_clock_128), the date (montserrat_24,
-    // muted), Talpy asleep (one still picture), the weather (its icon at half size, still, and the temperature in montserrat_40), and
-    // "PC offline" (montserrat_14, dim) while the PC isn't there.
+    // muted), Talpy asleep (one still picture), the weather (its icon at half size, still, and the
+    // temperature in montserrat_40), and "PC offline" (montserrat_14, dim) while the PC isn't there.
     content = make_box(face, LV_FLEX_FLOW_COLUMN, 16);
     lv_obj_align(content, LV_ALIGN_CENTER, 0, 0);
 
