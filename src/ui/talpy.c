@@ -5,6 +5,7 @@
 #include "esp_random.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define TICK_MS 20 // the player works in steps of 100 ms; this is how often we look
 
@@ -44,6 +45,7 @@ static void on_delete(lv_event_t *e) {
 static uint8_t *alloc_buf(size_t size) {
     uint8_t *b = (uint8_t *)heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!b) b = (uint8_t *)heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (b) memset(b, 0, size); // transparent, so a first frame that doesn't decode never shows leftover RAM
     return b;
 }
 
