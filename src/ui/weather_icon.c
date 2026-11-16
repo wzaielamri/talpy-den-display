@@ -6,9 +6,8 @@
 //     and appear as they fall out underneath;
 //   - the box clips its children, so a drop that falls past y 96 simply disappears.
 //
-// The weather card's icon is that size and animated (weather_icon_create/_set). The hourly columns'
-// are the same pictures at half size and standing still (weather_icon_small_*): every x, y, w and h
-// goes through S(), which halves it there.
+// The hourly columns' (and, for now, the clock face's) are these pictures at half size and standing still
+// (weather_icon_small_*): every x, y, w and h goes through S(), which halves it there.
 //
 // To change an icon, edit only its draw_... function.
 
@@ -22,11 +21,6 @@
 #define DROP_Y0 40 // drops start here, hidden behind a cloud at y 0
 
 typedef enum { WX_CLEAR, WX_PARTLY, WX_OVERCAST, WX_FOG, WX_DRIZZLE, WX_RAIN, WX_SNOW, WX_THUNDER } wx_kind_t;
-
-static lv_obj_t *wx_icon;   // the weather card's
-static int shown_kind = -1; // nothing shown yet
-static bool shown_day;
-static bool is_frozen;      // held still (motion.c): something covers it, also when a new icon comes then
 
 // What the draw_... functions draw into: the box, at full size (shrink 1) or half (2), moving or
 // still, and the colour behind it (the moon's cut-out disc must be exactly that to look like a hole).
@@ -225,27 +219,6 @@ static bool day_for(wx_kind_t kind, bool is_day) {
 }
 
 // ---------- public ----------
-
-void weather_icon_create(lv_obj_t *parent, int x, int y) {
-    wx_icon = wx_group(parent, x, y, ICON_W, ICON_H);
-}
-
-void weather_icon_set(int wmo_code, bool is_day) {
-    if (!wx_icon) return; // not created yet
-    wx_kind_t kind = kind_from_wmo(wmo_code);
-    bool day = day_for(kind, is_day);
-    if ((int)kind == shown_kind && day == shown_day) return; // same icon: keep it running
-    shown_kind = kind;
-    shown_day = day;
-    draw_into(wx_icon, 1, is_frozen, COLOR_CARD, kind, day); // (still while covered: it moves once uncovered)
-}
-
-void weather_icon_freeze(bool frozen) {
-    if (frozen == is_frozen) return;
-    is_frozen = frozen; // (kept also before the first icon: it comes still then)
-    if (wx_icon && shown_kind >= 0)
-        draw_into(wx_icon, 1, frozen, COLOR_CARD, (wx_kind_t)shown_kind, shown_day); // the same picture, still or moving
-}
 
 lv_obj_t *weather_icon_small_create(lv_obj_t *parent) {
     return wx_group(parent, 0, 0, ICON_W / 2, ICON_H / 2);

@@ -8,6 +8,7 @@
 #include "ui/card_usage.h"
 #include "ui/card_hourly.h"
 #include "app/job_watch.h"
+#include "app/weather_state.h"
 #include "ui/header_pc.h"
 #include "ui/clock_face.h"
 #include "app/screen_power.h"
@@ -37,6 +38,7 @@ static void handle_weather(JsonDocument &doc) {
         .updated = doc["updated"].as<const char *>(),
     };
     card_weather_set(&w);
+    weather_state_weather(&w);
     clock_face_set_weather(w.code, w.is_day, w.temp); // (the clock face shows it too)
     debug_printf("card_weather_set(temp %d, hi %d, lo %d, code %d, day %d, \"%s\")\n",
             w.temp, w.hi, w.lo, w.code, w.is_day, w.updated ? w.updated : "(none)");
@@ -143,6 +145,7 @@ static void handle_hourly(JsonDocument &doc) {
     hourly_update_t u = {hours.data(), (int)hours.size(), doc["summary"].as<const char *>(),
                          doc["updated"].as<const char *>()};
     card_hourly_set(&u);
+    weather_state_hourly(&u);
     debug_printf("card_hourly_set(%d hours)\n", u.count);
 }
 
@@ -161,6 +164,7 @@ static void set_pc_online(bool online) {
     pc_online = online;
     header_pc_set_online(online);
     clock_face_set_pc(online);
+    weather_state_pc(online);
     screen_power_pc_present(online);
     Serial.printf("PC %s\n", online ? "back" : "away");
 }
@@ -188,6 +192,7 @@ static void handle_line(const char *line) {
             heard = true;
             header_pc_set_online(true);
             clock_face_set_pc(true);
+            weather_state_pc(true);
         }
         set_pc_online(true);
     }
