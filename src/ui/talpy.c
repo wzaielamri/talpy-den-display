@@ -96,17 +96,6 @@ lv_obj_t *talpy_create_set(lv_obj_t *parent, const talpy_set_t *set) {
 
 lv_obj_t *talpy_create(lv_obj_t *parent) { return talpy_create_set(parent, &TALPY_SET); }
 
-lv_obj_t *talpy_create_still(lv_obj_t *parent, uint16_t frame) {
-    lv_obj_t *img = new_image(parent);
-    if (frame >= TALPY_SET.frame_count) frame = 0;
-    const talpy_frame_t *f = &TALPY_SET.frames[frame];
-    talpy_t *t = make(img, &TALPY_SET, f->w, f->h);
-    if (!t) return img;
-    show_frame(t, frame);
-    lv_image_set_src(img, &t->dsc);
-    return img;
-}
-
 // The state of a moving Talpy, or NULL (no object, no memory, or a still).
 static talpy_t *moving(lv_obj_t *obj) {
     talpy_t *t = obj ? (talpy_t *)lv_obj_get_user_data(obj) : NULL;

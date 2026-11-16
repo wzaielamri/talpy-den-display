@@ -1,6 +1,7 @@
 #include "weather_state.h"
 #include "clock.h"
 #include "lvgl.h"
+#include "ui/clock_face.h"
 #include "ui/weather_view.h"
 #include <time.h>
 
@@ -27,6 +28,7 @@ static void push(void) {
     };
     wv_view_t v = weather_view(&in);
     card_weather_view(&v); // (the card ignores what has not changed)
+    clock_face_set_view(&v);
 }
 
 static void on_minute(lv_timer_t *t) {

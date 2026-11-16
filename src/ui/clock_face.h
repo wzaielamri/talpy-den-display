@@ -1,13 +1,14 @@
 #pragma once
 #include "lvgl.h"
+#include "ui/weather_view.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// The clock face: the time big in the middle, the date under it, Talpy asleep (a still picture),
-// the weather (icon and temperature) under that, over everything else on the main screen.
+// The clock face: the time big in the middle, the date under it, the weather Talpy (calm: slow, with a calm sky)
+// and the temperature under that, then one line saying how the chats stand, over everything else on the main screen.
 // screen_power.c shows it after 2 min without a touch (no job working or waiting, no "Stay on") and
 // while the PC is away, dimmed; a touch on it calls the touch callback (back to the cards). It's what the screen shows 24/7 when
 // nobody looks, so nothing on it moves: the time is drawn again once a minute, and the whole face moves a few
@@ -20,10 +21,15 @@ void clock_face_on_touch(clock_face_touch_cb_t cb);
 void clock_face_show(void);
 void clock_face_hide(void);
 
-// The current weather (the weather card's), under the date; till the first, none.
-void clock_face_set_weather(int wmo_code, bool is_day, int temp);
+// The weather Talpy and temperature (the weather card's view, from weather_state), under the date. The temperature
+// shows only while v->has_temp; Talpy always shows (plain, hidden or in a weather).
+void clock_face_set_view(const wv_view_t *v);
 
-// "PC offline" at its bottom while the PC isn't there.
+// The chat line under the weather ("1 chat needs you", ...; banner_headline's words), hidden while the PC is away.
+// Till the first jobs message it says "Waiting for the PC".
+void clock_face_set_chats(bool have_data, int waiting, int working, int done);
+
+// "PC offline" at its bottom while the PC isn't there (the chat line is hidden meanwhile).
 void clock_face_set_pc(bool online);
 
 #ifdef __cplusplus

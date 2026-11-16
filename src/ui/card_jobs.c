@@ -197,19 +197,25 @@ static void show_row(int i, const job_info_t *job) {
     lv_obj_remove_flag(r->row, LV_OBJ_FLAG_HIDDEN);
 }
 
+void card_jobs_counts(const job_update_t *u, int *waiting, int *working, int *done) {
+    *waiting = *working = *done = 0;
+    int n = u && u->jobs ? u->count : 0;
+    for (int i = 0; i < n; i++) {
+        switch (u->jobs[i].state) {
+        case JOB_WORKING: (*working)++; break;
+        case JOB_WAITING: (*waiting)++; break;
+        case JOB_DONE:    (*done)++;    break;
+        }
+    }
+}
+
 void card_jobs_set(const job_update_t *u) {
     if (!u || !jb_more) return; // no data, or card not created yet
     int n = u->jobs ? u->count : 0;
 
     // The banner counts every job, also the ones that don't get a row.
-    int working = 0, waiting = 0, done = 0;
-    for (int i = 0; i < n; i++) {
-        switch (u->jobs[i].state) {
-        case JOB_WORKING: working++; break;
-        case JOB_WAITING: waiting++; break;
-        case JOB_DONE:    done++;    break;
-        }
-    }
+    int working, waiting, done;
+    card_jobs_counts(u, &waiting, &working, &done);
     set_banner(true, waiting, working, done);
     char stamp[32];
     snprintf(stamp, sizeof stamp, "updated %s", u->updated ? u->updated : "--:--:--");

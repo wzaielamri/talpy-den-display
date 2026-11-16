@@ -39,7 +39,6 @@ static void handle_weather(JsonDocument &doc) {
     };
     card_weather_set(&w);
     weather_state_weather(&w);
-    clock_face_set_weather(w.code, w.is_day, w.temp); // (the clock face shows it too)
     debug_printf("card_weather_set(temp %d, hi %d, lo %d, code %d, day %d, \"%s\")\n",
             w.temp, w.hi, w.lo, w.code, w.is_day, w.updated ? w.updated : "(none)");
 }
@@ -83,6 +82,9 @@ static void handle_jobs(JsonDocument &doc) {
         .updated = doc["updated"].as<const char *>(),
     };
     card_jobs_set(&u);
+    int waiting, working, done;
+    card_jobs_counts(&u, &waiting, &working, &done);
+    clock_face_set_chats(true, waiting, working, done); // (the clock face's chat line)
     debug_printf("card_jobs_set(%d jobs)\n", u.count);
 
     // A job working or waiting for you: something to watch, so the screen stays lit.

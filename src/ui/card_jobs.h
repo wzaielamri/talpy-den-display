@@ -49,6 +49,9 @@ void card_jobs_freeze(bool on);
 // Call from the LVGL loop (loop()/serial handler), never from another task.
 void card_jobs_set(const job_update_t *u);
 
+// How many of u's jobs wait for you, work and are done (what the banner and the clock face's chat line count).
+void card_jobs_counts(const job_update_t *u, int *waiting, int *working, int *done);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

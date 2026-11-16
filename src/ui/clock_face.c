@@ -1,10 +1,9 @@
 #include "clock_face.h"
 #include "app/clock.h"
-#include "talpy.h"
-#include "talpy_set.h"
+#include "banner_text.h"
 #include "theme.h"
 #include "ui_common.h"
-#include "weather_icon.h"
+#include "weather_talpy.h"
 #include <stdio.h>
 #include <time.h>
 
@@ -17,8 +16,10 @@ LV_FONT_DECLARE(font_clock_128); // tools/make_clock_font.py: Montserrat Medium 
 static const int8_t SHIFT[SHIFTS][2] = {{0, 0}, {4, 2}, {6, -2}, {2, -4}, {-2, -2}, {-6, 2}, {-4, 4}, {0, 4}};
 
 static lv_obj_t *face;     // the whole screen, in the screen's colour
-static lv_obj_t *content;  // time, date, weather and "PC offline", one under the other, centred
-static lv_obj_t *time_label, *date_label, *weather_row, *weather_icon, *temp_label, *pc_label;
+static lv_obj_t *content;  // time, date, weather, chats and "PC offline", one under the other, centred
+static lv_obj_t *time_label, *date_label, *weather_row, *temp_label, *chat_label, *pc_label;
+static lv_obj_t *wx_talpy;  // the calm weather Talpy: runs only while the face shows
+static bool pc_online;  // (false till the first message: "PC offline" shows, as before)
 static clock_face_touch_cb_t on_touch;
 static int shown_minute = -1;
 static int shift;
@@ -62,26 +63,44 @@ static void tick(lv_timer_t *timer) {
 void clock_face_show(void) {
     if (!face) return;
     show_time(true);
+    weather_talpy_freeze(wx_talpy, false);
     lv_obj_remove_flag(face, LV_OBJ_FLAG_HIDDEN);
 }
 
 void clock_face_hide(void) {
-    if (face) lv_obj_add_flag(face, LV_OBJ_FLAG_HIDDEN);
+    if (!face) return;
+    lv_obj_add_flag(face, LV_OBJ_FLAG_HIDDEN);
+    weather_talpy_freeze(wx_talpy, true);
 }
 
-void clock_face_set_weather(int wmo_code, bool is_day, int temp) {
+void clock_face_set_view(const wv_view_t *v) {
+    if (!face || !v) return;
+    weather_talpy_set(wx_talpy, v->talpy, v->sky);
+    if (v->has_temp) {
+        lv_label_set_text_fmt(temp_label, "%d°", v->temp);
+        lv_obj_remove_flag(temp_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(temp_label, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void clock_face_set_chats(bool have_data, int waiting, int working, int done) {
     if (!face) return;
-    weather_icon_small_set(weather_icon, wmo_code, is_day, COLOR_BG); // (still; the moon's cut-out in the face's colour)
-    lv_label_set_text_fmt(temp_label, "%d°", temp);
-    lv_obj_remove_flag(weather_row, LV_OBJ_FLAG_HIDDEN);
+    char text[48];
+    banner_headline(text, sizeof text, have_data, waiting, working, done);
+    lv_label_set_text(chat_label, text);
 }
 
 void clock_face_set_pc(bool online) {
     if (!face) return;
-    if (online)
+    pc_online = online;
+    if (online) {
         lv_obj_add_flag(pc_label, LV_OBJ_FLAG_HIDDEN);
-    else
+        lv_obj_remove_flag(chat_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
         lv_obj_remove_flag(pc_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(chat_label, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 // A box that only lays out its children (no background, border or padding of its own).
@@ -110,22 +129,26 @@ void clock_face_create(lv_obj_t *screen) {
     lv_obj_add_event_cb(face, face_pressed, LV_EVENT_PRESSED, NULL);
 
     // Spec: one column, centred, 16 px apart: the time (font_clock_128), the date (montserrat_24,
-    // muted), Talpy asleep (one still picture), the weather (its icon at half size, still, and the
-    // temperature in montserrat_40), and "PC offline" (montserrat_14, dim) while the PC isn't there.
+    // muted), the weather (the calm weather Talpy, 104 x 96, and the temperature in montserrat_40), the chat
+    // line (montserrat_14, muted; hidden while the PC is away) and "PC offline" (montserrat_14, dim) while it is.
+    // (the face moves a few px each minute, so the weather Talpy's own motion stays small and slow)
     content = make_box(face, LV_FLEX_FLOW_COLUMN, 16);
     lv_obj_align(content, LV_ALIGN_CENTER, 0, 0);
 
     time_label = make_label(content, &font_clock_128, COLOR_TEXT, "--:--");
     date_label = make_label(content, &lv_font_montserrat_24, COLOR_MUTED, "");
 
-    talpy_create_still(content, TALPY_SET.sleep_still); // (one picture, no animation: it shifts with the face)
-
     weather_row = make_box(content, LV_FLEX_FLOW_ROW, 12);
-    weather_icon = weather_icon_small_create(weather_row);
+    wx_talpy = weather_talpy_create(weather_row, true);
+    weather_talpy_freeze(wx_talpy, true); // (clock_face_show lets him go on)
     temp_label = make_label(weather_row, &lv_font_montserrat_40, COLOR_TEXT, "");
-    lv_obj_add_flag(weather_row, LV_OBJ_FLAG_HIDDEN); // till the PC's first weather
+    lv_obj_add_flag(temp_label, LV_OBJ_FLAG_HIDDEN); // till the weather is known
+
+    chat_label = make_label(content, &lv_font_montserrat_14, COLOR_MUTED, "");
+    clock_face_set_chats(false, 0, 0, 0);
 
     pc_label = make_label(content, &lv_font_montserrat_14, COLOR_DIM, "PC offline");
+    clock_face_set_pc(pc_online);
 
     lv_timer_create(tick, 1000, NULL);
 }

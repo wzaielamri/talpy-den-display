@@ -62,7 +62,6 @@ static void test_tables_consistent(void) {
     CHECK(s->mood_count == TALPY_MOODS);
     for (int m = 0; m < s->mood_count; m++)
         CHECK(s->moods[m].picks >= 1);
-    CHECK(s->sleep_still < s->frame_count);
     CHECK(s->h <= 112);
     CHECK(s->data_size <= 2000000);
 }

@@ -38,7 +38,6 @@ typedef struct {
     const talpy_pick_t *picks;   uint16_t pick_count;
     const talpy_mood_def_t *moods; uint16_t mood_count;
     uint16_t react_clip;                 // the reaction: the banner's "finished", the weather set's thunder duck
-    uint16_t sleep_still;                // banner only: a frame (cropped to itself) for the clock face; 0xFFFF: none
     int16_t x, y;                        // where the canvas sits in its scene box
 } talpy_set_t;
 

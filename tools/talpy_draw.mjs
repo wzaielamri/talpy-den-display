@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Draws Talpy's pictures for the display as SVG files, with Talpy Den's own drawing code
 // (<talpy-den>/package/contents/ui/talpy), and manifest.json saying what each one is. Two sets:
-// banner: each chat mood's rest pose and clips, the "finished" reaction and the clock face's sleeping still;
+// banner: each chat mood's rest pose and clips, the "finished" reaction;
 // weather: Talpy for each weather (with a prop: sunglasses, mug, rain hat, umbrella, beanie and scarf), his rest
 // and his few moves, and the thunder duck. tools/make_talpy_frames.py runs it and turns the SVGs into the board's frames.
 //
@@ -287,8 +287,7 @@ function banner() {
             add(name, mood, 'clip', clip(mood, name));
     }
     add('finished', 'done', 'reaction', clip('done', 'finished'));
-    const sleepStill = save('sleep_still', picture(settled('done')), 0);
-    return { moods, clips, sleep_still: sleepStill };
+    return { moods, clips };
 }
 
 // ================================================================ the weather set
@@ -569,11 +568,11 @@ function weather() {
         moods[mood] = { pause: WEATHER_PAUSE,
                         weights: Object.fromEntries(look.moves.map(m => [`${mood}-${m}`, WEATHER_WEIGHT])) };
     }
-    return { moods, clips, sleep_still: null };
+    return { moods, clips };
 }
 
 // ---------------------------------------------------------------- the manifest
 
 const drawnSet = set === 'weather' ? weather() : banner();
-const manifest = { talpy_den: commit(), moods: drawnSet.moods, clips: drawnSet.clips, sleep_still: drawnSet.sleep_still };
+const manifest = { talpy_den: commit(), moods: drawnSet.moods, clips: drawnSet.clips };
 writeFileSync(join(outdir, 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');

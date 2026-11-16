@@ -34795,7 +34795,6 @@ const talpy_set_t TALPY_WEATHER_SET = {
     .moods = MOODS,
     .mood_count = 12,
     .react_clip = 16,
-    .sleep_still = 0xFFFF,
     .x = 20,
     .y = 28,
 };
