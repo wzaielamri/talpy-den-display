@@ -202,9 +202,27 @@ static void test_long_freeze_advances_one_step(void) {
 
 static void test_millis_wrap(void) {
     talpy_player_t p;
-    uint32_t now = 0xFFFFFF00u;
+    uint32_t now = 0xFFFFFF00u; // 256 ms before the wrap; the shortest pause (500 ms) ends after it
     talpy_player_init(&p, &set, 9, now);
     talpy_player_set_mood(&p, TALPY_WORKING, now);
+    uint32_t start = now;
+    // No clip before pause_min, even though pause_due is numerically tiny after the wrap.
+    for (; now - start < 500; now += 10) {
+        talpy_player_tick(&p, now);
+        CHECK(talpy_player_frame(&p) == 2);
+    }
+    // A clip starts by pause_max.
+    bool started = false;
+    for (; now - start <= 1500 + 10; now += 10) {
+        talpy_player_tick(&p, now);
+        uint16_t f = talpy_player_frame(&p);
+        if (f == 5 || f == 7) {
+            started = true;
+            break;
+        }
+    }
+    CHECK(started);
+    // Later clips keep starting.
     int clips_started = 0;
     uint16_t last = talpy_player_frame(&p);
     for (int i = 0; i < 600; i++, now += 10) {
