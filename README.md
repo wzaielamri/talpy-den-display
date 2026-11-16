@@ -21,11 +21,16 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 
 ## What it does
 
-- **Jobs:** counts every chat as working, waiting or done and lists four of them, waiting first, with
-  where each one runs (`local`, `lab (ssh)`, `web (podman)`) and for how long. When more don't fit,
-  it says how many more there are. The waiting tile pulses.
+- **Jobs:** a banner at the top of the card counts every chat as waiting, working or done. Its
+  headline says what matters most: "1 chat needs you", "2 chats working", "1 finished chat" or
+  "All quiet" ("Waiting for the PC" until the PC's first message). Below it come four of the chats,
+  waiting first, with where each one runs (`local`, `lab (ssh)`, `web (podman)`) and for how long.
+  When more don't fit, it says how many more there are. While a chat waits, the banner turns amber.
+  Talpy, the mole, sits in the banner and acts out the mood: he waves a sign when a chat needs you,
+  types, thinks or reads while chats work, and sleeps when they're done. (The old pulsing border is gone.)
 - **Alerts:** a full-screen alert when a chat starts waiting for you (stays until you tap OK), and a
-  shorter one when a chat finishes (15 s).
+  shorter one when a chat finishes (15 s). Talpy peeks over the top of the box: with his sign for a
+  waiting chat, jumping in confetti for a finished one.
 - **Plan usage:** the 5-hour and 7-day windows of up to two accounts, with their reset times. As in
   Talpy Den, a bar is green, orange from 70% and red from 90%.
 - **Weather:** now, today's high and low, and the next 8 hours with rain chances, from
@@ -37,7 +42,8 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
   to 10%. It doesn't switch while a chat is working or waiting, or while Stay on is set. It also
   shows the clock while the PC is away (no message for 60 s), so a board on a powered hub can stay on
   day and night. The clock moves a few pixels each minute so nothing burns in. Double-tap the screen
-  (anywhere but the weather card) to show it right away. Touch it to come back.
+  (anywhere but the weather card) to show it right away. Touch it to come back. Talpy sleeps on it
+  as one still picture: nothing on the clock face moves.
 
 ## Hardware
 
@@ -130,6 +136,16 @@ handler is documented in [`src/app/serial_link.cpp`](src/app/serial_link.cpp).
 position, size, colour, font and state, with the LVGL calls behind them. Download it and open it in
 a browser (it loads its fonts from Google Fonts). The screenshots above are exported from it.
 
+Talpy is drawn by Talpy Den's own drawing code, not redrawn by hand. To make his frames again, you
+need a Talpy Den checkout next to this one, node, `rsvg-convert` and Pillow:
+
+```sh
+python3 tools/make_talpy_frames.py ../talpy-den src/ui/talpy_data.c
+```
+
+The result, `src/ui/talpy_data.c`, is committed, so building the board needs none of this. The same
+checkout always gives the same file. Add `--pngs DIR` to also write the pictures the layout spec uses.
+
 The clock's digits are Montserrat Medium at 128 px. LVGL's built-in fonts stop at 48 px, so
 [`tools/make_clock_font.py`](tools/make_clock_font.py) generates `src/ui/font_clock_128.c` (needs
 Pillow):
@@ -138,24 +154,33 @@ Pillow):
 python3 tools/make_clock_font.py .pio/libdeps/advance-hmi/lvgl/scripts/built_in_font/Montserrat-Medium.ttf 128 src/ui/font_clock_128.c
 ```
 
+The tests that run on your PC, with no board (the banner's texts, Talpy's frame decoder and player):
+
+```sh
+sh test/native/run.sh
+python3 -m unittest tools/test_make_talpy_frames.py   # the frame tool
+```
+
 ## Layout
 
 ```
 src/main.cpp     setup and the main loop
 src/app/         serial messages, alerts from job changes, when the clock shows, saved settings
 src/ui/          cards, pull-down panel, alert, clock face, weather icons (LVGL 9.1)
+src/ui/talpy*    Talpy: the widget, the frame decoder and player, and the generated frames
 src/drivers/     display, touch, backlight, real-time clock
 include/         lv_conf.h, theme colours, pins
 host/            sync.py, the udev rule, the systemd user service
 design/          the layout spec, its screenshots and the photo
-tools/           the clock font generator
+test/            native tests (`sh test/native/run.sh`)
+tools/           the clock font and Talpy frame generators, and the frame tool's tests
 ```
 
 ## Credits
 
 Built with [LVGL](https://lvgl.io/), [LovyanGFX](https://github.com/lovyan03/LovyanGFX),
 [ArduinoJson](https://arduinojson.org/) and [pioarduino](https://github.com/pioarduino/platform-espressif32).
-The board setup (pins, panel timings, backlight controller) follows Elecrow's CrowPanel examples. The
+Talpy is Talpy Den's mole, drawn by its drawing code (same author, MIT). The board setup (pins, panel timings, backlight controller) follows Elecrow's CrowPanel examples. The
 clock digits come from [Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License
 1.1). Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Claude is a trademark of
 Anthropic, which this project isn't affiliated with.
