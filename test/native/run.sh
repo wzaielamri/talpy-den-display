@@ -27,5 +27,6 @@ run_test test_codec src/ui/talpy_codec.c
 run_test test_data src/ui/talpy_data.c src/ui/talpy_weather_data.c src/ui/talpy_codec.c
 run_test test_player src/ui/talpy_player.c
 run_test test_banner_text src/ui/banner_text.c
+run_test test_weather_view src/ui/weather_view.c
 
 exit $failed
