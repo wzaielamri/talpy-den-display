@@ -86,7 +86,8 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
   `talpy_mood_t`. The weather set needs ten "moods" (one per picture), so the set type and the player have to take a
   mood count (or the weather set gets its own type); the banner's data and behaviour must not change.
 - Flash today: firmware 2,213,744 bytes of the 4 MB app partition (about 1.8 MB free). Budget for the weather frames:
-  ≤ 0.8 MB compressed; the tool prints the total and fails above it.
+  ≤ 0.8 MB compressed; the tool prints the total and fails above it. (Measured by the design review: the frame tool at
+  1.1 px per unit averages about 2.9 KB a frame; the moves above come to roughly 200–230 frames, 0.6–0.7 MB.)
 - Scale: in the mockups the scene is 95 × 88 box units shown at 104 × 96 px (about 1.1 px per unit; the banner uses 1.3).
   The weather Talpy is smaller than the banner's so the sky has room; the sky sizes are those of round 3 (see
   `compose.py`): e.g. sun radius 10.5 units with rays to 18, clouds 1.45–1.8× Talpy Den's cloud puff, moon radius 10.5.
@@ -127,12 +128,18 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
   its own canvas and checks (budget, size), and the native data test covers it.
 - Moves with Talpy Den equivalents use them (sip: `coffee`; shiver: `shiver`; duck/peek: depth `hidden`/`peek`; sleep's
   "z"); the others (glasses glint, umbrella twirl, sway) are new poses/steps in the tool.
+- Two more pictures for the clock face: Talpy **hidden** in his burrow (Talpy Den's depth `hidden`: only his antenna light
+  shows), and his **plain** rest pose with no prop (connected, no weather).
 
 ### The sky
 
 - Built from `weather_icon.c`'s shapes and animations, re-laid out around Talpy at the round-3 sizes (bigger than
-  today's icon parts) and colours (`COLOR_SUN`, `COLOR_CLOUD`, `COLOR_RAIN`, `COLOR_MOON`, the theme greys for overcast
-  and storm clouds). Clouds have flat bottoms and bumpy tops. Its parts are drawn in the 104 × 96 box like today's icon.
+  today's icon parts) and the mockup's colours: day clouds near-white with a light edge (`#eef1f8` / `#c4cbdc`, as in
+  `compose.py`), overcast clouds `COLOR_CLOUD` (`#C9D2DD`), the storm cloud `COLOR_DIM`-dark, night cloud `COLOR_MUTED`,
+  sun `COLOR_SUN`, drops `COLOR_RAIN`, moon `COLOR_MOON`. Clouds have flat bottoms and bumpy tops. Its parts are drawn
+  in the 104 × 96 box like today's icon.
+- Talpy Den's own particles that would double the board's sky (e.g. `shiver`'s snowflakes) are left out of the frames:
+  the board's sky draws the weather.
 - The hourly row's half-size still icons stay as they are (same code or a kept copy of it; the builder decides).
 
 ### The clock face
@@ -141,8 +148,23 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
   instance), animated, with the temperature beside it as now.
 - Slower than the card's: longer pauses, and his moves at most every so often (the builder picks; the face is up all
   night at 10% brightness and should feel still at a glance).
+- **A calm sky** (the owner's choice): the same motion as the card's, thinned — fewer drops and flakes, still falling at
+  their normal speed (slow rain reads as snow), lightning about once a minute (Talpy ducks with it), stars twinkling and
+  clouds drifting slowly.
+- **What weather it shows** (the owner's choice for old or missing weather):
+
+  | The PC | Weather known | Sky and temperature | Talpy |
+  |---|---|---|---|
+  | connected | the last weather message | that weather | out, with that weather's prop |
+  | connected | none yet (or none ever: no location set) | no sky, no temperature | out, his plain rest pose (no prop) |
+  | offline (the board's existing rule: no message for 60 s, or `power: sleep`) | the hourly forecast has the current hour | that hour's code, `day` and temperature, from the 8 hours the board already holds (`card_hourly`'s data) | **hidden in his burrow, only his antenna light showing**, so it's clear the PC isn't connected |
+  | offline | no forecast hour for now (more than 8 h after the last forecast, or none) | no sky, no temperature | hidden in his burrow |
+
+  The forecast hour is chosen by the board's clock and updates on the hour; "PC offline" shows under it as now. When the
+  PC comes back, the face goes back to the current weather and Talpy comes out.
 - Under it, a short muted line with the chats' state: the banner's headline (`banner_headline()`: "All quiet",
-  "2 finished chats", "1 chat working", …), updated when the jobs change. "PC offline" stays as now.
+  "2 finished chats", "1 chat working", …), updated when the jobs change, **hidden while the PC is offline** (its counts
+  would be stale); "PC offline" stays as now.
 - The face still shifts a few pixels each minute. Only one weather Talpy animates at a time: the card's is frozen while
   the clock shows (MOTION_CLOCK), the clock's runs only while the clock shows.
 
@@ -155,7 +177,12 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
 ## Left to the builder
 
 - The exact poses, steps and timings of each move; how many frames each takes (within the budget).
-- How the set type and player take more moods; whether the weather widget is a new file or grows `weather_icon.c`.
+- How the set type and player take more moods (some weathers may have no moves: zero picks, so the data test's
+  "at least one pick" becomes per set); how `talpy.c` takes a set instead of the hard-wired `TALPY_SET`; how the clock
+  face's slower pace comes from the same set (e.g. a per-instance pause factor; pauses are `uint16` ms, so ≤ 65.5 s);
+  whether the weather widget is a new file or grows `weather_icon.c`.
+- How the clock face gets the hourly forecast and the PC's state (today `serial_link.cpp` passes the hourly data to
+  `card_hourly` and the PC's state to `clock_face_set_pc`).
 - The sky's exact layout per weather, within the round-3 sizes; whether rain stopping at the canopy is a clip region or
   per-drop end height.
 - Placement of the chat line and the weather row on the clock face, within its current column.
@@ -166,7 +193,8 @@ The owner picked B (recommended; their answer to "sizes right, and OK with B?" w
   banner's behaviour unchanged: its tests still pass).
 - `pio run` builds; firmware under 4 MB; the tool's contact sheet of every weather clip looked at against the mockups.
 - On the board (owner's go): every weather via `host/sync.py --demo` (or a test message per code), day and night; the
-  clock face; the pull-down drag over the card; the alert; nothing animates under the dim.
+  clock face connected and with the PC away (Talpy hidden, the forecast hour's sky, no chat line); the pull-down drag
+  over the card; the alert; nothing animates under the dim.
 
 ## Appendix: the mockup sources
 
