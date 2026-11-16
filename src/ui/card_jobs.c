@@ -1,16 +1,18 @@
 #include "card_jobs.h"
 #include "app/clock.h"
+#include "banner_text.h"
+#include "talpy.h"
+#include "talpy_set.h"
 #include "theme.h"
 #include "ui_common.h"
 #include <stdio.h>
 #include <string.h>
 
-// One count tile: big number on top, caption below.
+// One count in the banner: state-coloured dot and "<n> <word>" next to it.
 typedef struct {
-    lv_obj_t *tile;
-    lv_obj_t *num;
-    lv_obj_t *cap;
-} count_tile_t;
+    lv_obj_t *dot;
+    lv_obj_t *text;
+} count_pair_t;
 
 // One job row: dot, name (and where it runs under it), state text on the right.
 typedef struct {
@@ -21,11 +23,13 @@ typedef struct {
     lv_obj_t *state;
 } job_row_t;
 
-static lv_obj_t *jb_title;
+static lv_obj_t *banner;
+static lv_obj_t *banner_headline_label;
+static lv_obj_t *banner_talpy;
 static lv_obj_t *jb_updated;
 static lv_obj_t *jb_more;
 static lv_obj_t *jb_empty; // in the rows' place: "Waiting for the PC", then "No jobs right now" while none
-static count_tile_t tile_work, tile_wait, tile_done;
+static count_pair_t pair_wait, pair_work, pair_done;
 static job_row_t rows[JOBS_ROWS];
 
 // What each shown row is about, kept so its "how long" moves on without a new message.
@@ -48,18 +52,13 @@ static const char *state_word(job_state_t s) {
     }
 }
 
-// Spec: 136 x 88 at (x, 28), radius 12, padding 12. Number font 40 at 0,0; caption font 14 at 0,48.
-static count_tile_t make_count_tile(lv_obj_t *parent, int x, const char *caption, uint32_t color) {
-    count_tile_t t;
-    t.tile = make_blob(parent, x, 28, 136, 88, 12, COLOR_TILE);
-    lv_obj_set_style_pad_all(t.tile, 12, 0);
-
-    t.num = make_label(t.tile, &lv_font_montserrat_40, color, "0");
-    lv_obj_align(t.num, LV_ALIGN_TOP_LEFT, 0, 0);
-
-    t.cap = make_label(t.tile, &lv_font_montserrat_14, COLOR_MUTED, caption);
-    lv_obj_align(t.cap, LV_ALIGN_TOP_LEFT, 0, 48);
-    return t;
+// One dot + text pair of the counts row (a flex child: the row places it, so two-digit counts re-flow).
+static count_pair_t make_count_pair(lv_obj_t *row, uint32_t color) {
+    count_pair_t p;
+    p.dot = make_blob(row, 0, 0, 10, 10, LV_RADIUS_CIRCLE, color);
+    p.text = make_label(row, &lv_font_montserrat_14, COLOR_MUTED, "");
+    lv_obj_set_style_margin_right(p.text, 10, 0); // 6 px dot to text (row gap) + 10 = 16 px to the next pair
+    return p;
 }
 
 // Spec: 432 x 48 at (0, 124 + 48*i), no background, padding 0, 1 px divider at the bottom.
@@ -105,58 +104,38 @@ static void update_dividers(void) {
     }
 }
 
-// The waiting tile's border opacity at a point of its breath (0..360 degrees): full at 0, faint (20%)
-// at 180, full again at 360. A cosine, so the end of one breath is exactly the start of the next: no
-// turning point where a step could show (a back-and-forth animation turns around at each end).
-static void anim_breath(void *obj, int32_t deg) {
-    int32_t mid = (LV_OPA_COVER + LV_OPA_20) / 2, amp = (LV_OPA_COVER - LV_OPA_20) / 2;
-    int32_t opa = mid + ((amp * lv_trigo_cos((int16_t)deg)) >> LV_TRIGO_SHIFT);
-    lv_obj_set_style_border_opa((lv_obj_t *)obj, (lv_opa_t)opa, 0);
-}
-
-static bool wants_pulse; // a job waits for you
-static bool frozen;      // the pull-down panel is out: nothing moves under its dimming
-
-// While a job waits for you, the waiting tile's amber border breathes, so it catches the eye from
-// across the desk (held at full while frozen); with none waiting it's gone.
-static void apply_pulse(void) {
-    static bool pulsing;
-    bool run = wants_pulse && !frozen;
-    if (run == pulsing) return; // already so: a running breath keeps its rhythm
-    pulsing = run;
-    if (!run) {
-        lv_anim_delete(tile_wait.tile, anim_breath);
-        lv_obj_set_style_border_opa(tile_wait.tile, wants_pulse ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
-        return;
-    }
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, tile_wait.tile);
-    lv_anim_set_exec_cb(&a, anim_breath);
-    lv_anim_set_values(&a, 0, 360);
-    lv_anim_set_duration(&a, 1800); // one breath
-    lv_anim_set_path_cb(&a, lv_anim_path_linear);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_start(&a);
-}
-
-static void pulse_waiting(bool on) {
-    if (on == wants_pulse) return;
-    wants_pulse = on;
-    if (!on) lv_obj_set_style_border_opa(tile_wait.tile, LV_OPA_TRANSP, 0); // (also while frozen)
-    apply_pulse();
-}
-
 void card_jobs_freeze(bool on) {
-    frozen = on;
-    apply_pulse();
+    talpy_freeze(banner_talpy, on);
 }
 
-static void set_counts(int working, int waiting, int done) {
-    lv_label_set_text_fmt(tile_work.num, "%d", working);
-    lv_label_set_text_fmt(tile_wait.num, "%d", waiting);
-    lv_label_set_text_fmt(tile_done.num, "%d", done);
-    pulse_waiting(waiting > 0);
+// Sets a label's text only when it changed: a jobs message that changes nothing then redraws little.
+static void set_text_if_changed(lv_obj_t *label, const char *text) {
+    if (strcmp(lv_label_get_text(label), text) != 0)
+        lv_label_set_text(label, text);
+}
+
+static void set_count(count_pair_t *p, int n, const char *word) {
+    char text[24];
+    snprintf(text, sizeof text, "%d %s", n, word);
+    set_text_if_changed(p->text, text);
+}
+
+// The banner for these counts: headline, counts row, waiting colours, Talpy's mood.
+static void set_banner(bool have_data, int waiting, int working, int done) {
+    char head[40];
+    banner_headline(head, sizeof head, have_data, waiting, working, done);
+    set_text_if_changed(banner_headline_label, head);
+    set_count(&pair_wait, waiting, "waiting");
+    set_count(&pair_work, working, "working");
+    set_count(&pair_done, done, "done");
+
+    // While a chat waits the banner is amber (so it catches the eye from across the desk); the border is
+    // always 2 px, only its opacity changes, so nothing moves.
+    bool alert = waiting > 0;
+    lv_obj_set_style_bg_color(banner, lv_color_hex(alert ? COLOR_ALERT : COLOR_TILE), 0);
+    lv_obj_set_style_border_opa(banner, alert ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_text_color(banner_headline_label, lv_color_hex(alert ? COLOR_WAIT : COLOR_TEXT), 0);
+    talpy_set_mood(banner_talpy, banner_mood(have_data, waiting, working, done));
 }
 
 // How long, in the unit that fits: "<1m", "3m", "2h", "4d"; a done job's as "just now", "5m ago".
@@ -222,7 +201,7 @@ void card_jobs_set(const job_update_t *u) {
     if (!u || !jb_more) return; // no data, or card not created yet
     int n = u->jobs ? u->count : 0;
 
-    // The tiles count every job, also the ones that don't get a row.
+    // The banner counts every job, also the ones that don't get a row.
     int working = 0, waiting = 0, done = 0;
     for (int i = 0; i < n; i++) {
         switch (u->jobs[i].state) {
@@ -231,8 +210,10 @@ void card_jobs_set(const job_update_t *u) {
         case JOB_DONE:    done++;    break;
         }
     }
-    set_counts(working, waiting, done);
-    lv_label_set_text_fmt(jb_updated, "updated %s", u->updated ? u->updated : "--:--:--");
+    set_banner(true, waiting, working, done);
+    char stamp[32];
+    snprintf(stamp, sizeof stamp, "updated %s", u->updated ? u->updated : "--:--:--");
+    set_text_if_changed(jb_updated, stamp);
 
     // Fill the rows from the top: waiting jobs first, then working, then done.
     static const job_state_t order[] = {JOB_WAITING, JOB_WORKING, JOB_DONE};
@@ -256,45 +237,71 @@ void card_jobs_set(const job_update_t *u) {
     }
 
     if (shown == 0) {
-        lv_label_set_text(jb_empty, "No jobs right now");
         lv_obj_remove_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
+// Spec: the banner, 432 x 116 at (0, 0), radius 12, padding 0, 2 px border (amber, shown only while a chat
+// waits). Inside (measured from inside the border): headline montserrat 24 at (16, 14); counts row at (16, 54);
+// "updated" at (16, 84); Talpy (96 x 104) at the bottom right, 12 px in and 2 px up.
+static void make_banner(lv_obj_t *parent) {
+    banner = make_blob(parent, 0, 0, 432, 116, 12, COLOR_TILE);
+    lv_obj_set_style_pad_all(banner, 0, 0);
+    lv_obj_set_style_border_width(banner, 2, 0);
+    lv_obj_set_style_border_color(banner, lv_color_hex(COLOR_WAIT), 0);
+    lv_obj_set_style_border_opa(banner, LV_OPA_TRANSP, 0); // (till a chat waits)
+
+    // Fixed one-line height: LONG_DOT only adds "..." when the text overflows the height. The width stops
+    // short of Talpy.
+    banner_headline_label = make_label(banner, &lv_font_montserrat_24, COLOR_TEXT, "");
+    lv_obj_set_size(banner_headline_label, 432 - 16 - TALPY_SET.w - 16, lv_font_get_line_height(&lv_font_montserrat_24));
+    lv_label_set_long_mode(banner_headline_label, LV_LABEL_LONG_DOT);
+    lv_obj_align(banner_headline_label, LV_ALIGN_TOP_LEFT, 16, 14);
+
+    // Counts row: three dot + text pairs, 16 px apart, left to right: waiting, working, done.
+    lv_obj_t *counts = lv_obj_create(banner);
+    lv_obj_set_size(counts, LV_SIZE_CONTENT, 18);
+    lv_obj_align(counts, LV_ALIGN_TOP_LEFT, 16, 54);
+    lv_obj_set_style_bg_opa(counts, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(counts, 0, 0);
+    lv_obj_set_style_pad_all(counts, 0, 0);
+    lv_obj_set_style_pad_column(counts, 6, 0);
+    lv_obj_remove_flag(counts, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_flex_flow(counts, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(counts, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    pair_wait = make_count_pair(counts, COLOR_WAIT);
+    pair_work = make_count_pair(counts, COLOR_WORKING);
+    pair_done = make_count_pair(counts, COLOR_DONE);
+
+    jb_updated = make_label(banner, &lv_font_montserrat_14, COLOR_DIM, "updated --:--:--");
+    lv_obj_align(jb_updated, LV_ALIGN_TOP_LEFT, 16, 84);
+
+    banner_talpy = talpy_create(banner);
+    lv_obj_align(banner_talpy, LV_ALIGN_BOTTOM_RIGHT, -12, -2);
+}
+
 void card_jobs_create(lv_obj_t *parent) {
-    jb_title = make_card_title(parent, "CLAUDE JOBS");
+    make_banner(parent);
 
-    jb_updated = make_label(parent, &lv_font_montserrat_14, COLOR_DIM, "");
-    lv_obj_align(jb_updated, LV_ALIGN_TOP_RIGHT, 0, 0);
-
-    //                          parent   x   caption    colour
-    tile_work = make_count_tile(parent,   0, "working", COLOR_WORKING);
-    tile_wait = make_count_tile(parent, 148, "waiting", COLOR_WAIT);
-    tile_done = make_count_tile(parent, 296, "done",    COLOR_DONE);
-
-    // Waiting tile border: always 2 px wide (only its opacity changes) with 2 px less padding,
-    // so the number sits exactly where it does in the other tiles and never moves.
-    lv_obj_set_style_border_width(tile_wait.tile, 2, 0);
-    lv_obj_set_style_border_color(tile_wait.tile, lv_color_hex(COLOR_WAIT), 0);
-    lv_obj_set_style_border_opa(tile_wait.tile, LV_OPA_TRANSP, 0); // (till a job waits)
-    lv_obj_set_style_pad_all(tile_wait.tile, 10, 0);
-
-    for (int i = 0; i < JOBS_ROWS; i++)
+    for (int i = 0; i < JOBS_ROWS; i++) {
         rows[i] = make_job_row(parent, i);
+        lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN); // (till the PC's first message)
+    }
 
     // Spec: under the rows, lined up with the job names. Hidden while every job has a row.
     jb_more = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "");
     lv_obj_align(jb_more, LV_ALIGN_BOTTOM_LEFT, 24, 0);
+    lv_obj_add_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
 
     lv_timer_create(age_tick, 10000, NULL);
 
-    // Spec: jb_empty, in the middle of the rows' place. Until the PC's first jobs message: nothing
-    // made up (0 0 0, no rows), the card says it waits.
-    jb_empty = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "");
+    // Spec: jb_empty, in the middle of the rows' place; shown when data came with no jobs. Until the PC's
+    // first jobs message nothing is made up (no rows, no "No jobs"): the banner says it waits.
+    jb_empty = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "No jobs right now");
     lv_obj_align(jb_empty, LV_ALIGN_TOP_MID, 0, 212);
-    job_update_t u = {NULL, 0, NULL};
-    card_jobs_set(&u);
-    lv_label_set_text(jb_empty, "Waiting for the PC");
+    lv_obj_add_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
+
+    set_banner(false, 0, 0, 0);
 }

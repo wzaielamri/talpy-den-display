@@ -33,13 +33,13 @@ typedef struct {
 
 void card_jobs_create(lv_obj_t *parent);
 
-// Hold the waiting tile's breathing border still (true; full while a job waits) or let it breathe
-// again (false): the pull-down panel holds it still while it's out, so nothing changes under its
+// Freeze Talpy in the banner (true; the current picture stays) or let him go on (false): the pull-down panel
+// and the clock face hold it still while they cover the card, so nothing changes under their
 // dimming (a change there showed through undimmed).
 void card_jobs_freeze(bool on);
 
 // Fill the whole card from the full job list:
-// - the three tiles count every job;
+// - the banner (headline, counts, Talpy's mood) counts every job;
 // - the rows show waiting jobs first (they need you), then working, then done,
 //   keeping the PC's order within each state;
 // - jobs that don't fit are counted in "+N more in Talpy Den" under the rows;
