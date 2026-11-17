@@ -4,8 +4,12 @@
 #include <stdlib.h>
 
 #define BOX_W 104
-#define BOX_H 96
+#define BOX_H 96 // the scene: the sky's boxes (weather_sky.h)
 #define CALM_PACE 3
+// Room over the scene for what the sky draws higher than its top: the partly cloudy sun's rays reach 6.4 px above
+// it, the storm cloud 4.8, the rain cloud 2.5. The scene sits that much lower in the box; only the back of the sky
+// (clouds, sun, moon) uses the room, the drops and flakes still come in at the scene's top.
+#define SKY_ROOM 8
 
 typedef struct {
     lv_obj_t *talpy;
@@ -17,11 +21,12 @@ typedef struct {
 
 static void on_delete(lv_event_t *e) { free(lv_event_get_user_data(e)); }
 
-static lv_obj_t *layer(lv_obj_t *parent) {
+// An invisible box at (0, y) in parent, h high, that clips its children.
+static lv_obj_t *layer(lv_obj_t *parent, int y, int h) {
     lv_obj_t *o = lv_obj_create(parent);
     lv_obj_remove_style_all(o);
-    lv_obj_set_size(o, BOX_W, BOX_H);
-    lv_obj_set_pos(o, 0, 0);
+    lv_obj_set_size(o, BOX_W, h);
+    lv_obj_set_pos(o, 0, y);
     lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     return o;
 }
@@ -32,13 +37,15 @@ static void on_flash(void *user) {
 }
 
 lv_obj_t *weather_talpy_create(lv_obj_t *parent, bool calm) {
-    lv_obj_t *box = layer(parent);
+    lv_obj_t *box = layer(parent, 0, SKY_ROOM + BOX_H);
     wt_t *w = (wt_t *)calloc(1, sizeof(wt_t));
     if (!w) return box; // no memory: an empty box
-    lv_obj_t *back = layer(box);
+    // The back of the sky: the scene SKY_ROOM down (its padding), clipped only at the box's own top.
+    lv_obj_t *back = layer(box, 0, SKY_ROOM + BOX_H);
+    lv_obj_set_style_pad_top(back, SKY_ROOM, 0);
     w->talpy = talpy_create_set(box, &TALPY_WEATHER_SET);
-    lv_obj_set_pos(w->talpy, TALPY_WEATHER_SET.x, TALPY_WEATHER_SET.y);
-    lv_obj_t *front = layer(box);
+    lv_obj_set_pos(w->talpy, TALPY_WEATHER_SET.x, SKY_ROOM + TALPY_WEATHER_SET.y);
+    lv_obj_t *front = layer(box, SKY_ROOM, BOX_H);
     w->calm = calm;
     w->sky = weather_sky_create(back, front);
     if (calm) talpy_set_pace(w->talpy, CALM_PACE);

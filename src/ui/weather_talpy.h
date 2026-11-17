@@ -7,8 +7,9 @@
 extern "C" {
 #endif
 
-// The weather Talpy: Talpy (TALPY_WEATHER_SET) in front of his live sky (weather_sky.h), in one 104 x 96 box with no
-// background that clips its children and is not clickable. Layers, bottom to top: sky back, Talpy, sky front.
+// The weather Talpy: Talpy (TALPY_WEATHER_SET) in front of his live sky (weather_sky.h), in one 104 x 104 box with no
+// background that clips its children and is not clickable: the 104 x 96 scene at its bottom, and 8 px over it for
+// the clouds and suns that reach higher. Layers, bottom to top: sky back, Talpy, sky front.
 // Deleting the box frees everything. The functions do nothing on NULL.
 
 // calm (the clock face): Talpy pace 3 and a calm sky. Created running.

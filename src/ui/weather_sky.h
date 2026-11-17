@@ -15,7 +15,8 @@ extern "C" {
 typedef struct weather_sky weather_sky_t;
 
 // A sky drawing into back and front (104 x 96 each, made by the caller, holding nothing else; both must live as long
-// as the sky, which is freed with back). Shows nothing until weather_sky_set. NULL if out of memory.
+// as the sky, which is freed with back). Some clouds and suns reach up to 7 px above the box: back can have room for
+// them as top padding (its inside still 104 x 96). Shows nothing until weather_sky_set. NULL if out of memory.
 weather_sky_t *weather_sky_create(lv_obj_t *back, lv_obj_t *front);
 
 // Show the sky of a weather (TW_CLEAR_DAY .. TW_PARTLY_NIGHT); TW_PLAIN and TW_HIDDEN: nothing.
