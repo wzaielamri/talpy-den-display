@@ -174,24 +174,56 @@ void sky_star(weather_sky_t *s, float x, float y, float k, float o, uint32_t ms,
 
 // ---------- drops and flakes ----------
 
-// A falling drop or flake: its y follows the fall until its bottom reaches its stop line (its top then: kept in its
-// user data), then it waits out of sight above its box until it falls again.
+// Where a faller past its stop line waits, out of sight above its box, until it falls again.
 #define PARKED (-64)
-static void anim_fall(void *obj, int32_t v) {
-    const int32_t stop_top = (int32_t)(intptr_t)lv_obj_get_user_data((lv_obj_t *)obj);
-    lv_obj_set_y((lv_obj_t *)obj, v <= stop_top ? v : PARKED);
+
+// Every faller where it is t ms into a round of the sky's fall clock: its own fall is t - lag ms in (a fall before,
+// if its lag is more than t), its y following the fall until its bottom reaches its stop line.
+static void place_fallers(weather_sky_t *s, int32_t t) {
+    const int32_t ms = (int32_t)s->fall_ms;
+    for (int i = 0; i < s->faller_count; i++) {
+        const sky_faller_t *f = &s->fallers[i];
+        int32_t in = (t - f->lag) % ms;
+        if (in < 0)
+            in += ms;
+        // the faller's fall as lv_anim would have it, for the path, which reads only these
+        const lv_anim_t fall = {.start_value = f->from, .end_value = f->to, .duration = ms, .act_time = in};
+        const int32_t y = s->fall_path(&fall);
+        lv_obj_set_y(f->obj, y <= f->stop_top ? y : PARKED);
+    }
 }
 
-void sky_faller(weather_sky_t *s, lv_obj_t *parent, int oy, int x, int w, int h, int stop, uint32_t color, uint32_t ms,
-                uint32_t delay, lv_anim_path_cb_t path) {
-    lv_obj_t *d = sky_blob(parent, x, -h - oy, w, h, LV_RADIUS_CIRCLE, color, LV_OPA_COVER);
-    lv_obj_set_user_data(d, (void *)(intptr_t)(stop - h + 1 - oy)); // its top when its bottom is on the stop line
+static void anim_fall_clock(void *sky, int32_t t) { place_fallers(sky, t); }
+
+void sky_faller(weather_sky_t *s, lv_obj_t *parent, int oy, int x, int w, int h, int stop, uint32_t color,
+                uint32_t lag) {
+    if (s->faller_count == SKY_FALLERS)
+        return;
+    sky_faller_t *f = &s->fallers[s->faller_count++];
+    f->from = -h - oy;
+    f->to = BOX_H - oy;
+    f->stop_top = stop - h + 1 - oy;
+    f->lag = (int32_t)lag;
+    f->obj = sky_blob(parent, x, f->from, w, h, LV_RADIUS_CIRCLE, color, LV_OPA_COVER);
+}
+
+// The clock goes from 0 to ms over ms, over and over (whatever time lv_anim drops at the end of a round, it drops for
+// every faller at once). The fallers are put where they are at 0 first: the clock's start isn't applied early.
+void sky_fall(weather_sky_t *s, uint32_t ms, lv_anim_path_cb_t path) {
+    s->fall_ms = ms;
+    s->fall_path = path;
+    place_fallers(s, 0);
     lv_anim_t a;
-    wx_anim_fall(&a, d, anim_fall, -h - oy, BOX_H - oy, ms, delay, path);
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s);
+    lv_anim_set_exec_cb(&a, anim_fall_clock);
+    lv_anim_set_values(&a, 0, (int32_t)ms);
+    lv_anim_set_duration(&a, ms);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
     sky_start(s, &a);
 }
 
-// The cloud drops fall in a group under the cloud, which hides them for the first part of their fall. Start times
+// The cloud drops fall in a group under the cloud, which hides them for the first part of their fall. Their lags
 // spread over one fall, so they don't all fall together.
 void sky_drops(weather_sky_t *s, const drop_t *t, int n, int w, int h, uint32_t ms, int cloud_bottom) {
     if (s->calm)
@@ -200,9 +232,9 @@ void sky_drops(weather_sky_t *s, const drop_t *t, int n, int w, int h, uint32_t 
     for (int i = 0; i < n; i++) {
         const bool from_cloud = t[i].cloud && under;
         sky_faller(s, from_cloud ? under : s->front, from_cloud ? cloud_bottom : 0, t[i].x - w / 2, w, h,
-                   s->talpy_out ? t[i].stop : t[i].burrow, DROP_COLOR, ms, (uint32_t)i * ms / (uint32_t)n,
-                   lv_anim_path_ease_in);
+                   s->talpy_out ? t[i].stop : t[i].burrow, DROP_COLOR, (uint32_t)i * ms / (uint32_t)n);
     }
+    sky_fall(s, ms, lv_anim_path_ease_in);
 }
 
 // ---------- lightning ----------

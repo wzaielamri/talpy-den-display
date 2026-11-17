@@ -11,8 +11,9 @@
 // The draw_... functions pass compose.py's own numbers; ux(), uy() and us() turn them into px. The building blocks
 // (clouds, sun, moon, stars, drops, the lightning) are in weather_sky_parts.c.
 //
-// Animations are lv_anims on the shapes. Each sky keeps a list of the ones it started, so freeze can stop them where
-// they are (keeping a copy of each) and start the copies again later, going on from there.
+// Animations are lv_anims on the shapes; the drops and flakes all hang on one, the sky's fall clock (on the sky
+// itself), so they can't fall into step (see weather_sky_parts.h). Each sky keeps a list of the ones it started, so
+// freeze can stop them where they are (keeping a copy of each) and start the copies again later, going on from there.
 //
 // To change a sky, edit only its draw_... function.
 
@@ -171,9 +172,10 @@ static void draw_snow(weather_sky_t *s) {
     const uint32_t ms = FALL_MS(5, 2600);
     for (int i = 0; i < n; i++) {
         const flake_t *f = &SNOW_FLAKES[i];
-        sky_faller(s, s->front, 0, f->x - f->d / 2, f->d, f->d, s->talpy_out ? f->stop : f->burrow, SNOW_COLOR, ms,
-                   (uint32_t)i * ms / (uint32_t)n, lv_anim_path_linear);
+        sky_faller(s, s->front, 0, f->x - f->d / 2, f->d, f->d, s->talpy_out ? f->stop : f->burrow, SNOW_COLOR,
+                   (uint32_t)i * ms / (uint32_t)n);
     }
+    sky_fall(s, ms, lv_anim_path_linear);
 }
 
 // 8 Thunderstorm: compose's storm cloud(62, -10, 1.8) with the bolt under it, hidden, flashing now and then (and
@@ -210,7 +212,11 @@ static void draw_partly_night(weather_sky_t *s) {
 
 // ---------- public ----------
 
-static void sky_deleted(lv_event_t *e) { free(lv_event_get_user_data(e)); }
+static void sky_deleted(lv_event_t *e) {
+    weather_sky_t *s = lv_event_get_user_data(e);
+    lv_anim_delete(s, NULL); // the fall clock (the shapes' animations go with the shapes)
+    free(s);
+}
 
 weather_sky_t *weather_sky_create(lv_obj_t *back, lv_obj_t *front) {
     weather_sky_t *s = calloc(1, sizeof *s);
@@ -231,9 +237,11 @@ static bool follows_talpy(tw_mood_t sky) {
 void weather_sky_set(weather_sky_t *s, tw_mood_t sky, bool calm, bool talpy_out) {
     if (!s || (sky == s->shown && calm == s->calm && (talpy_out == s->talpy_out || !follows_talpy(sky))))
         return; // the same sky: keep it running
-    lv_obj_clean(s->back); // delete the old shapes; LVGL deletes their animations with them
+    lv_anim_delete(s, NULL); // the fall clock, then the old shapes; LVGL deletes their animations with them
+    lv_obj_clean(s->back);
     lv_obj_clean(s->front);
     s->anim_count = 0;
+    s->faller_count = 0;
     s->lit = false;
     s->shown = sky;
     s->calm = calm;

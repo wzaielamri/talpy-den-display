@@ -30,12 +30,21 @@
 // Calm (the clock face): drifting, turning, breathing and twinkling take 7/4 as long. Falling doesn't change.
 #define PACE(s, ms) ((uint32_t)((s)->calm ? (ms) * 7 / 4 : (ms)))
 
-#define SKY_ANIMS 16 // the most any sky starts: rain's 10 drops
+#define SKY_ANIMS   8  // the most any sky starts: fog's glow and 5 bands
+#define SKY_FALLERS 10 // the most drops or flakes any sky has: rain's and snow's 10
 
 typedef struct {
     lv_anim_t a; // the one started (to find it again), or, while frozen, the copy to start again
     bool held;   // frozen: a is a copy waiting to start again
 } sky_anim_t;
+
+// A drop or flake (see sky_faller), y in its parent.
+typedef struct {
+    lv_obj_t *obj;
+    int32_t from, to; // its y as a fall starts and as it ends
+    int32_t stop_top; // its y when its bottom is on its stop line; past it, it waits out of sight until it falls again
+    int32_t lag;      // ms behind the sky's fall clock
+} sky_faller_t;
 
 struct weather_sky {
     lv_obj_t *back, *front;
@@ -52,6 +61,14 @@ struct weather_sky {
     int ray_c, ray_r1, ray_r2; // the rays' centre in their group; radii in 1/4 px
     int anim_count;
     sky_anim_t anims[SKY_ANIMS];
+    // The drops or flakes fall on one clock (one animation), each its own lag behind it. With an animation each, they
+    // would fall into step: lv_anim (9.1) drops whatever time ran past a round's end as it starts the next round (a
+    // few ms, different for each; a hold-up of the LVGL loop: all of it), and two that once end in the same tick go
+    // on together for good.
+    sky_faller_t fallers[SKY_FALLERS];
+    int faller_count;
+    uint32_t fall_ms;            // one fall
+    lv_anim_path_cb_t fall_path; // how it speeds up
 };
 
 // compose.py's units -> scene px: its viewBox -14 -22 95 88 is shown at 104 x 96.
@@ -82,16 +99,21 @@ void sky_moon(weather_sky_t *s, float x, float y);
 // compose.py's 4-point star at (x, y), size k, opacity o, twinkling ms each way (calm: slower) after delay.
 void sky_star(weather_sky_t *s, float x, float y, float k, float o, uint32_t ms, uint32_t delay);
 
-// Something falling forever in the front box: a w x h pill at x (box px) from above the box to below it over ms
-// after delay, its bottom stopping at stop (box px; 96: never). parent: the front box, or a group in it at oy.
-void sky_faller(weather_sky_t *s, lv_obj_t *parent, int oy, int x, int w, int h, int stop, uint32_t color, uint32_t ms,
-                uint32_t delay, lv_anim_path_cb_t path);
+// Something falling forever in the front box (once sky_fall starts the clock): a w x h pill at x (box px) from above
+// the box to below it, lag ms behind the sky's fall clock, its bottom stopping at stop (box px; 96: never). parent:
+// the front box, or a group in it at oy.
+void sky_faller(weather_sky_t *s, lv_obj_t *parent, int oy, int x, int w, int h, int stop, uint32_t color,
+                uint32_t lag);
+// Start the sky's fall clock: every faller falls over ms along path, over and over, each its lag behind the clock.
+// Call once, after the sky's last sky_faller.
+void sky_fall(weather_sky_t *s, uint32_t ms, lv_anim_path_cb_t path);
 
 // A drop: its centre x, the line its bottom stops at (box px) with Talpy out and with Talpy down in his burrow, and
 // whether it falls from behind the sky's cloud (showing only under it) or from above the box.
 typedef struct { int16_t x, stop, burrow; bool cloud; } drop_t;
 // n drops of w x h (calm: the first half), ms a fall, speeding up, each stopping at its line for the Talpy the sky
-// is drawn for. cloud_bottom: the first row under the cloud the cloud drops come out of (0: none).
+// is drawn for, their lags spread over one fall. cloud_bottom: the first row under the cloud the cloud drops come out
+// of (0: none).
 void sky_drops(weather_sky_t *s, const drop_t *t, int n, int w, int h, uint32_t ms, int cloud_bottom);
 
 // compose.py's lightning bolt in the back box, hidden, flashing now and then (8-15 s; calm 50-70 s) and calling

@@ -25,15 +25,3 @@ void wx_anim_bounce(lv_anim_t *a, void *var, lv_anim_exec_xcb_t cb, int32_t from
     lv_anim_set_path_cb(a, lv_anim_path_ease_in_out);
     lv_anim_set_repeat_count(a, LV_ANIM_REPEAT_INFINITE);
 }
-
-void wx_anim_fall(lv_anim_t *a, void *var, lv_anim_exec_xcb_t cb, int32_t from, int32_t to, uint32_t ms,
-                  uint32_t delay, lv_anim_path_cb_t path) {
-    lv_anim_init(a);
-    lv_anim_set_var(a, var);
-    lv_anim_set_exec_cb(a, cb);
-    lv_anim_set_values(a, from, to);
-    lv_anim_set_duration(a, ms);
-    lv_anim_set_delay(a, delay);
-    lv_anim_set_path_cb(a, path);
-    lv_anim_set_repeat_count(a, LV_ANIM_REPEAT_INFINITE);
-}
