@@ -13,6 +13,10 @@
 #define LV_USE_OS LV_OS_NONE
 #define LV_USE_LOG 0
 
+// A failed LVGL check prints where and restarts the board (src/drivers/lvgl_assert.c), not while(1).
+#define LV_ASSERT_HANDLER_INCLUDE "lvgl_assert.h"
+#define LV_ASSERT_HANDLER lvgl_assert_failed(__FILE__, __LINE__);
+
 // Read the touch panel and draw every 16 ms (LVGL's default is 33): a finger dragging the pull-down
 // panel is followed twice as closely and a release is seen sooner. The flush waits for the panel's
 // refresh (~44 Hz at 18 MHz), so drawing never goes faster than that.
