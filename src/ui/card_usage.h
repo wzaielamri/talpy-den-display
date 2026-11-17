@@ -21,10 +21,10 @@ typedef struct {
 
 void card_usage_create(lv_obj_t *parent);
 
-// A row per window (5h, then the week) and a column per account, in the order given, headed by its name
-// and plan; in each, the window's bar and %, and under them when it resets ("↻ 18:00", or the day once
-// it's more than a day away). Just one account: its column across the card, its bars longer and its %
-// bigger.
+// A row per window (5h, then the week) and a column per account, in the order given, headed by its name;
+// in each, the window's bar and %, and under them when it resets ("↻ 18:00", or the day once it's more
+// than a day away). Just one account: its column across the card, its bars longer, its % bigger and its
+// plan after its name.
 // A window's bar is green, orange from 70% and red from 90% (its % too), as in Talpy Den.
 // Once a window's reset time has passed it shows 0% and no reset time, till the next reading.
 // Accounts past n are hidden. Copies the texts.

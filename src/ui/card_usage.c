@@ -16,11 +16,11 @@
 // column across both, its bars longer, its % bigger and its plan after its name.
 //
 // Spec: the card's inside is INNER_W wide ("USAGE" takes its first 54 px of the title line); the rows' names fit
-// NAMES_W ("Week" is 42 px); the two accounts' columns are COL_W wide at COL_X, one account's from COL_X[0] to the
-// right edge. Window c's row at y ROW_Y(c).
+// NAMES_W ("Week" is 42 px); the two accounts' columns are COL_W wide at COL_X, 14 px apart (so each % sits nearer
+// its own bar than the next column's), one account's from COL_X[0] to the right edge. Window c's row at y ROW_Y(c).
 #define INNER_W  240 // the card's 280 less its padding
 #define NAMES_W  58
-#define COL_W    88  // "work • Team" is 86 px
+#define COL_W    84
 #define ROW_Y(c) (24 + 40 * (c))
 static const int COL_X[2] = {NAMES_W, INNER_W - COL_W};
 static const char *const ROW_NAME[2] = {"5h", "Week"};
