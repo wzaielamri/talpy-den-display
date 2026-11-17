@@ -3,7 +3,10 @@
 
 #define LV_COLOR_DEPTH 16
 
-#define LV_USE_STDLIB_MALLOC LV_STDLIB_BUILTIN
+// LVGL takes its memory from the board's heap (malloc: internal RAM for small blocks, PSRAM for big ones), not from
+// a fixed pool of its own. Its default pool, 64 KB, ran out: the two weather Talpies' skies are made of many shapes,
+// and each of the clock face's 128 px digits needs an ~8 KB glyph buffer while it's drawn.
+#define LV_USE_STDLIB_MALLOC LV_STDLIB_CLIB
 #define LV_USE_STDLIB_STRING LV_STDLIB_BUILTIN
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_BUILTIN
 

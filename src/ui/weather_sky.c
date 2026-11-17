@@ -213,7 +213,7 @@ static void draw_partly_night(weather_sky_t *s) {
 static void sky_deleted(lv_event_t *e) { free(lv_event_get_user_data(e)); }
 
 weather_sky_t *weather_sky_create(lv_obj_t *back, lv_obj_t *front) {
-    weather_sky_t *s = calloc(1, sizeof *s); // (not lv_malloc: LVGL's own heap is small)
+    weather_sky_t *s = calloc(1, sizeof *s);
     if (!s)
         return NULL;
     s->back = back;
