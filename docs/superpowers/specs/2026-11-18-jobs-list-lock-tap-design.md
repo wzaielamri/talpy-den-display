@@ -95,6 +95,35 @@ an interface like `jobs.json` (the owner's call). Two ways to call it:
 - Tests next to the existing `publish_jobs` ones (`tests/test_talpy_den.py`) and for `--job` (a local id, a host's
   each way, an unknown id, a bad host name, the VS Code question), and a CHANGELOG line.
 
+### Talpy Den's safeguards (the owner's requirement: no injection, no privacy leak)
+
+**No injection.** Nothing in the id ever becomes a command, an option or a path; it is only compared with what
+Talpy Den lists.
+- The id is checked before anything else: one argument, at most 300 characters, printable ASCII with no whitespace,
+  quotes, backslash, `;`, `|`, `&`, `$`, backtick, `<`, `>` or `..`; not starting with `-`; the shape Talpy Den writes
+  (`[<host>:]<profile>/<id>/<kind>[/<more>]`). Anything else: `ok` false, "Not a chat id", and nothing runs.
+- `--job` takes the next argument as its id and nothing more: an id can't add or reach any other option of `jump.py`
+  (no `--allow-vscode`, no `--busy`, no answer to any question Talpy Den asks).
+- The host part must pass the rules Talpy Den already has for host names (`check_host`, `place_fresh`: no `/`, no
+  leading `.` or `-`) before `hosts/<host>.json` is opened; the session or chat id must pass `cs.valid_id`; the
+  profile must be one `discover_profiles` finds, matched by name, never joined into a path.
+- What runs is what a click runs, built by the same functions (`jump`, `open_remote`, the `--remote-*` ones), with
+  argument lists or every part `shlex.quote`d, as `open_remote` does today. A host's stored `openCommand` runs only on
+  that host, inside the quoted `ssh … <host> <command>`; `--job` takes it only if it is a string. The container path
+  (`attach_line`) is checked for the same quoting, and fixed if it isn't.
+- Tests: ids with `;`, `$(…)`, a backtick, a space, quotes, a newline, `../`, a leading `-`, an unknown or bad host,
+  and one too long each answer `ok` false with no process started (the test fails if anything is run).
+
+**No privacy leak.**
+- `jobs.json` gains only `startedAt`. Talpy Den writes no new file for this.
+- `--job`'s message says what happened, and to which window or host ("Switched to the terminal with the ssh
+  connection to lab"), never what a chat says: no prompt, reply, question or task.
+- For anyone who doesn't use the display, nothing changes: `--job` does something only when it is called.
+- On the display's side, `sync.py` runs `jump.py --job` only with an id that is exactly one in the current
+  `jobs.json` and passes the same character check, as an argument list. It forwards the answer's message as plain
+  ASCII cut to 80 characters, and logs only the id, `ok` and that message. The README's Privacy section says what a
+  tap sends (the chat's id) and gets back.
+
 The display works before this ships: without `startedAt` the order falls back to `since`, and a `jump.py` without
 `--job` (it prints its usage and exits non-zero) makes a tap answer "Talpy Den is too old for this".
 
