@@ -99,9 +99,12 @@ an interface like `jobs.json` (the owner's call). Two ways to call it:
 
 **No injection.** Nothing in the id ever becomes a command, an option or a path; it is only compared with what
 Talpy Den lists.
-- The id is checked before anything else: one argument, at most 300 characters, printable ASCII with no whitespace,
-  quotes, backslash, `;`, `|`, `&`, `$`, backtick, `<`, `>` or `..`; not starting with `-`; the shape Talpy Den writes
-  (`[<host>:]<profile>/<id>/<kind>[/<more>]`). Anything else: `ok` false, "Not a chat id", and nothing runs.
+- The id is checked before anything else: one argument, at most 300 characters, the shape Talpy Den writes
+  (`[<host>:]<profile>/<id>/<kind>[/shared]`) in letters, digits and `_ . @ : + -` only (so no whitespace, quote,
+  backslash, shell or glob character), no `..`, not starting with `-`; and it must be one of the jobs file's ids.
+  Anything else: `ok` false, "Not a chat id" (or "That chat isn't listed any more"), and nothing runs. (The final
+  review found a denylist let `*`, `?` and `[` through, which Talpy Den would take as a pattern for a transcript's
+  path: it became this allowlist.)
 - `--job` takes the next argument as its id and nothing more: an id can't add or reach any other option of `jump.py`
   (no `--allow-vscode`, no `--busy`, no answer to any question Talpy Den asks).
 - The host part must pass the rules Talpy Den already has for host names (`check_host`, `place_fresh`: no `/`, no
