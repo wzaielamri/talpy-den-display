@@ -451,12 +451,15 @@ const jobs = [
   { name: "fix-serial-parser", st: "working • 41m", c: "work", m: "lab (ssh)" },
   { name: "release-notes", st: "done • 5m ago", c: "done", m: "local" }
 ];
+el({ s: "main", id: "jb_list", widget: "obj", parent: "card_jobs", d: { x: 332, y: 232, w: 432, h: 212 },
+     place: "TOP_LEFT 0, 124", size: "432 × 212", color: "card",
+     note: "The rows' place: every job a row, one under the other (flex column, no padding, no gap), scrolling up and down only, its scrollbar showing only while it scrolls (LV_SCROLLBAR_MODE_ACTIVE). About 4½ rows show; the top of the fifth says there are more. Transparent. Clickable, so a finger can scroll it: a double tap there doesn't show the clock face (as on the weather card). Back to its top 30 s after the last touch on it, when a job starts waiting, and when the clock face shows. Rows are made as jobs come (up to 64) and kept hidden when they go; the list keeps where it was scrolled when a jobs message fills them again." });
 jobs.forEach((j, i) => {
   const ry = 232 + 48 * i, first = i === 0, tag = first ? "" : "_" + (i + 1);
-  el({ s: "main", id: "row" + tag || "row", widget: "obj", parent: "card_jobs", spec: first, d: { x: 332, y: ry, w: 432, h: 48 },
-       style: { boxShadow: "inset 0 -1px 0 " + col("line") },   // (all four: "+1 more" shows under the last)
-       place: "TOP_LEFT 0, " + (124 + 48 * i), size: "432 × 48", color: "line",
-       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row unless “+N more” shows under it. Rows 2–4: y 172, 220, 268. Waiting jobs first, then working, then done." });
+  el({ s: "main", id: "row" + tag || "row", widget: "obj", parent: "jb_list", spec: first, d: { x: 332, y: ry, w: 432, h: 48 },
+       style: { boxShadow: i < jobs.length - 1 ? "inset 0 -1px 0 " + col("line") : "none" },
+       place: "flex row " + (i + 1) + " (y " + 48 * i + " in the list)", size: "432 × 48", color: "line",
+       note: "No background, padding 0. Bottom border 1 px (border_side BOTTOM), none on the last row. Order (job_order.c): waiting jobs first, the one asking longest on top; then every other job by when it started, the newest first (its since without a start time), so a row stays put when its job finishes. Pressed: the tile colour (a drag scrolls the list instead). A tap on a job with an id asks the PC to bring it to the front ({\"type\":\"open\"}, app/pc_open.cpp), the id taken when the finger lands." });
   el({ s: "main", id: "row_dot" + tag, widget: "obj", parent: "row", spec: first, d: { x: 332, y: ry + 18, w: 12, h: 12 }, round: true,
        style: { background: col(j.c) }, place: "TOP_LEFT 0, 18", size: "12 × 12", color: j.c, note: "Circle in the job's state colour." });
   el({ s: "main", id: "row_name" + tag, widget: "label", parent: "row", spec: first, text: j.name, font: 24, color: "text", cut: true,
@@ -466,11 +469,8 @@ jobs.forEach((j, i) => {
        d: { x: 356, y: ry + 29, w: 280 }, place: "TOP_LEFT 24, 29", size: "280 × 16",
        note: "Where it runs, as the PC words it (“local”, “lab (ssh)”, “web (podman)”). LV_LABEL_LONG_DOT. Hidden when the PC sends none." });
   el({ s: "main", id: "row_state" + tag, widget: "label", parent: "row", spec: first, text: j.st, font: 14, color: j.c,
-       d: { r: 764, y: ry + 16 }, place: "RIGHT_MID 0, 0", size: "auto", note: "State and how long, in the state colour. The board works out how long from the job's since and its own clock, again every 10 s: “<1m”, “3m”, “2h”, “4d”; done: “just now”, “5m ago”. The state word alone while the clock isn't set." });
+       d: { r: 764, y: ry + 16 }, place: "RIGHT_MID 0, 0", size: "auto", note: "After a tap: “Opening...” (muted) till the PC answers, then “Opened” (done colour) or why not (muted, 200 wide, LV_LABEL_LONG_DOT, the name giving way to 192) for 4 s; “No answer from the PC” after 20 s. Otherwise: state and how long, in the state colour. The board works out how long from the job's since and its own clock, again every 10 s: “<1m”, “3m”, “2h”, “4d”; done: “just now”, “5m ago”. The state word alone while the clock isn't set." });
 });
-el({ s: "main", id: "jb_more", widget: "label", parent: "card_jobs", text: "+1 more in Talpy Den", font: 14, color: "muted",
-     d: { x: 356, y: 428 }, place: "BOTTOM_LEFT 24, 0", size: "auto",
-     note: "Jobs that didn't get a row, lined up with the job names. Hidden while every job fits. The banner counts these too." });
 
 /* ---------- hourly forecast: tap the weather card ---------- */
 ["clock", "date", "pc_pill", "pc_text", "pull_zone", "pull_hint"].forEach(id => { rows.find(r => r.id === id).hdr = true; });
@@ -600,6 +600,12 @@ el({ s: "alert", id: "al_ok", widget: "button", parent: "alert_box", d: { x: 512
      note: "In the kind's colour. Tap: back to the screen it took the place of. A waiting alert stays till then; a finished one also goes by itself after 15 s, and doesn't take a waiting one's place. It also goes once its job stops waiting (the next jobs message says so); a job that keeps waiting doesn't bring it back." });
 el({ s: "alert", id: "al_ok_text", widget: "label", parent: "al_ok", text: "OK", font: 24, color: "bg",
      d: { cx: 582, cy: 316 }, place: "CENTER 0, 0", size: "auto" });
+el({ s: "alert", id: "al_open", widget: "button", parent: "alert_box", d: { x: 316, y: 290, w: 180, h: 52 },
+     style: { border: "2px solid " + col("wait"), borderRadius: "12px", background: "transparent", boxSizing: "border-box" },
+     place: "OUT_LEFT_MID of al_ok, -16, 0", size: "180 × 52", color: "wait",
+     note: "“Open on PC”, on both kinds: outlined (a 2 px border and its text in the kind's colour, no fill; pressed, a 20 % fill), so OK stays the main one. Tap: the PC brings the alert's job to the front ({\"type\":\"open\"}, as a tap on its row), and the alert goes. Never while the laptop is locked: no alert shows then." });
+el({ s: "alert", id: "al_open_text", widget: "label", parent: "al_open", text: "Open on PC", font: 24, color: "wait",
+     d: { cx: 406, cy: 316 }, place: "CENTER 0, 0", size: "auto" });
 
 // A job finished: the same box, its colours, Talpy and texts changed.
 rows.filter(r => r.s === "alert").forEach(r => {
@@ -743,7 +749,7 @@ function table() {
 const MODES = {
   main: {
     btn: "btn-main", hash: "normal", title: "Every element: normal screen",
-    caption: "Tap the weather card to open the hourly forecast, and the header to pull down the brightness, as on the board (where it's a swipe down). Hover a row in the table below to find its box on the screen. Example data: 5 jobs (2 working, 1 waiting, 2 done), so the fifth is counted in “+1 more”. A chat waits, so the banner is amber and Talpy holds up his sign."
+    caption: "Tap the weather card to open the hourly forecast, and the header to pull down the brightness, as on the board (where it's a swipe down). Hover a row in the table below to find its box on the screen. Example data: 5 jobs (2 working, 1 waiting, 2 done): four rows in view, the list scrolls to the fifth. A chat waits, so the banner is amber and Talpy holds up his sign."
   },
   hourly: {
     btn: "btn-hourly", hash: "hourly", title: "Every element: hourly forecast (the header stays from the normal screen)",

@@ -23,14 +23,24 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 
 - **Jobs:** a banner at the top of the card counts every chat as waiting, working or done. Its
   headline says what matters most: "1 chat needs you", "2 chats working", "1 finished chat" or
-  "All quiet" ("Waiting for the PC" until the PC's first message). Below it come four of the chats,
-  waiting first, with where each one runs (`local`, `lab (ssh)`, `web (podman)`) and for how long.
-  When more don't fit, it says how many more there are. While a chat waits, the banner turns amber.
+  "All quiet" ("Waiting for the PC" until the PC's first message). Below it comes every chat, in a
+  list you can scroll: the ones waiting for you first (the one asking longest on top), then the others
+  by when they started, the newest first, so a row stays where it is when its chat finishes. Each says
+  where it runs (`local`, `lab (ssh)`, `web (podman)`) and for how long. The list goes back to the top
+  30 s after you last touched it, and when a chat starts waiting. While a chat waits, the banner turns amber.
+- **Tap a chat** to bring it to the front on the laptop, as a click on its row in Talpy Den does (its
+  terminal tab, tmux pane or VS Code; a background chat opens attached; an SSH host's or a container's
+  through Talpy Den's own command for it). The row says "Opening..." and then "Opened", or why not. It
+  needs a Talpy Den with `jump.py --job` (else the row says "Talpy Den is too old for this").
   Talpy, the mole, sits in the banner and acts out the mood: he waves a sign when a chat needs you,
   types, thinks or reads while chats work, and sleeps when they're done. (The old pulsing border is gone.)
 - **Alerts:** a full-screen alert when a chat starts waiting for you (stays until you tap OK), and a
   shorter one when a chat finishes (15 s). Talpy peeks over the top of the box: with his sign for a
-  waiting chat, jumping in confetti for a finished one.
+  waiting chat, jumping in confetti for a finished one. **Open on PC** next to OK brings that chat to
+  the front on the laptop, as a tap on its row does.
+- **Locked laptop:** while your laptop's screen is locked, the display shows the clock and stays there:
+  no chat names, no alerts, a touch doesn't bring the cards back. Unlock it and the cards come back,
+  with the waiting alert you hadn't seen yet (also one the lock hid).
 - **Plan usage:** the 5-hour and 7-day windows of up to two accounts, with their reset times. As in
   Talpy Den, a bar is green, orange from 70% and red from 90%.
 - **Weather:** now, today's high and low, and the next 8 hours with rain chances, from
@@ -45,9 +55,10 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 - **Clock face:** after 2 minutes without a touch, the screen switches to a big clock, dimmed
   to 10%. It doesn't switch while a chat is waiting for you, or while Stay on is set (a chat that is
   only working doesn't hold it: its line on the clock face says it works). It also
-  shows the clock while the PC is away (no message for 60 s), so a board on a powered hub can stay on
-  day and night. The clock moves a few pixels each minute so nothing burns in. Double-tap the screen
-  (anywhere but the weather card) to show it right away. Touch it to come back. It shows the time,
+  shows the clock while the PC is away (no message for 60 s), and while the laptop is locked, so a
+  board on a powered hub can stay on day and night. The clock moves a few pixels each minute so nothing
+  burns in. Double-tap the screen (anywhere but the weather card and the list of chats) to show it right
+  away. Touch it to come back (not while the laptop is locked). It shows the time,
   the date, the weather (a slower weather Talpy and the temperature) and a line about your chats
   ("All quiet", "2 finished chats"). While the PC is away, the chat line gives way to "PC offline".
 
@@ -120,21 +131,33 @@ To skip `sync.py`, send the board one JSON object per line (under 8 KB) at 11520
 | `type` | Fields | `sync.py` sends it |
 |---|---|---|
 | `time` | `epoch`, `tz` (POSIX TZ string; the board keeps the last one, UTC until the first) | at the start and every 10 min |
-| `jobs` | `rows`: `id`, `name`, `state` (`working`/`waiting`/`done`), `since` (Unix s), `machine` | when they change |
+| `jobs` | `rows`: `id`, `name`, `state` (`working`/`waiting`/`done`), `since` (Unix s), `started` (Unix s, optional: the order), `machine` | when they change |
 | `usage` | `accounts`: `name`, `plan`, `five_hour`, `seven_day` (%), `five_hour_resets`, `seven_day_resets` | when they change |
 | `weather` | `temp`, `code` ([WMO](https://open-meteo.com/en/docs)), `day`, `hi`, `lo`, `updated` | every 15 min |
 | `hourly` | `summary`, `updated`, `hours`: `at`, `temp`, `code`, `day`, `rain` | every 15 min |
 | `power` | `state: "sleep"`: the PC is going away, show the clock | |
+| `lock` | `locked` (`true`/`false`): the laptop's screen is locked: the clock, no chat names, no alerts | at the start (before `jobs`) and when it changes |
+| `opened` | `id`, `ok`, `message`: the answer to the board's `open` | after each `open` |
 | `ping` | | after 10 s with nothing else sent |
 
 For example: `{"type":"jobs","rows":[{"id":"1","name":"fix-parser","state":"waiting","since":1762600000}]}`.
 The board makes the alerts itself by comparing each `jobs` message with the one before. Each
 handler is documented in [`src/app/serial_link.cpp`](src/app/serial_link.cpp).
 
+The board sends one line of its own: `{"type":"open","id":"<id>"}` when a chat is tapped (its row, or
+**Open on PC** on an alert). `sync.py` passes the id to Talpy Den's `jump.py --job` only if it is exactly
+one of the jobs file's and the laptop is unlocked, and answers with `opened` (one at a time, 15 s at
+most; the board gives up after 20 s). `DESK_TALPY_CODE` in the env file says where `jump.py` is, if
+Talpy Den isn't installed as the Plasma widget, the GNOME extension or the VS Code extension.
+
 ## Privacy
 
 - `sync.py` makes one network call: the weather from Open-Meteo, with your latitude and longitude.
 - Chat names go to the board as plain ASCII, and the board's log shows them, so `journalctl` does too.
+- While the laptop is locked, the screen shows no chat names (the board still gets them, as before).
+- A tap on a chat sends its id to the PC, and the PC answers what happened ("Opened", or why not):
+  never a prompt, a reply or what a chat asks. The id runs nothing by itself: it's only compared with
+  the jobs file and then with what Talpy Den lists.
 
 ## Design
 
@@ -164,24 +187,25 @@ Pillow):
 python3 tools/make_clock_font.py .pio/libdeps/advance-hmi/lvgl/scripts/built_in_font/Montserrat-Medium.ttf 128 src/ui/font_clock_128.c
 ```
 
-The tests that run on your PC, with no board (the banner's texts, Talpy's frame decoder and player, the weather Talpy's choice of picture):
+The tests that run on your PC, with no board (the banner's texts, the chats' order, the alerts and the lock, Talpy's frame decoder and player, the weather Talpy's choice of picture, and `sync.py`'s rows, lock and taps):
 
 ```sh
 sh test/native/run.sh
 python3 -m unittest tools/test_make_talpy_frames.py   # the frame tool
+python3 -m unittest discover -s host -p 'test_*.py'  # sync.py
 ```
 
 ## Layout
 
 ```
 src/main.cpp     setup and the main loop
-src/app/         serial messages, alerts from job changes, when the clock shows, saved settings
+src/app/         serial messages, alerts from job changes, when the clock shows (the lock too), a tap sent to the PC, saved settings
 src/ui/          cards, pull-down panel, alert, clock face, weather Talpy and sky (LVGL 9.1)
 src/ui/talpy*    Talpy: the widget, the frame decoder and player, and the generated frames
 src/ui/weather_*  the weather Talpy, his sky and the weather view
 src/drivers/     display, touch, backlight, real-time clock
 include/         lv_conf.h, theme colours, pins
-host/            sync.py, the udev rule, the systemd user service
+host/            sync.py and its tests, the udev rule, the systemd user service
 design/          the layout spec, its screenshots and the photo
 test/            native tests (`sh test/native/run.sh`)
 tools/           the clock font and Talpy frame generators, and the frame tool's tests
