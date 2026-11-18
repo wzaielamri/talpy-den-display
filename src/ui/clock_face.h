@@ -9,7 +9,7 @@ extern "C" {
 
 // The clock face: the time big in the middle, the date under it, the weather Talpy (calm: slow, with a calm sky)
 // and the temperature under that, then one line saying how the chats stand, over everything else on the main screen.
-// screen_power.c shows it after 2 min without a touch (no job working or waiting, no "Stay on") and while the PC is
+// screen_power.c shows it after 2 min without a touch (no job waiting for you, no "Stay on") and while the PC is
 // away, dimmed; a touch on it calls the touch callback (back to the cards). It's what the screen shows 24/7 when
 // nobody looks, so little on it moves, and slowly: the calm weather Talpy, the time drawn again once a minute, and the
 // whole face moving a few pixels each minute, so no picture stays in one place on the LCD for hours.

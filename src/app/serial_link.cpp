@@ -87,10 +87,9 @@ static void handle_jobs(JsonDocument &doc) {
     clock_face_set_chats(true, waiting, working, done); // (the clock face's chat line)
     debug_printf("card_jobs_set(%d jobs)\n", u.count);
 
-    // A job working or waiting for you: something to watch, so the screen stays lit.
-    bool busy = false;
-    for (const job_info_t &j : jobs) busy |= j.state == JOB_WORKING || j.state == JOB_WAITING;
-    screen_power_set_busy(busy);
+    // A job waiting for you: the cards stay. A working one doesn't hold them (one can work for hours, on
+    // another machine too): the clock face's chat line shows how many work.
+    screen_power_set_busy(waiting > 0);
 
     // A job that started waiting for you or finished: the alert.
     job_watch_update(jobs.data(), (int)jobs.size());

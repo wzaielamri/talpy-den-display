@@ -10,7 +10,7 @@
 #include "ui/motion.h"
 #include "ui/shade.h"
 
-#define CLOCK_AFTER_MS 120000 // no touch for this long (no job working or waiting, no "Stay on"): the clock
+#define CLOCK_AFTER_MS 120000 // no touch for this long (no job waiting for you, no "Stay on"): the clock
 // The clock face's brightness, in the slider's %: low enough that the backlight is silent. Its controller
 // (the STC8 at I2C 0x30) dims by PWM at a rate set in its own firmware, and the board hums from 99% down
 // to 12%; only 100% and the lowest levels are quiet. 10% is backlight value 242 (244 is dimmest).
@@ -19,7 +19,7 @@
 
 static int32_t brightness = 100; // the slider's value
 static bool stay_on;
-static bool busy;                // a job works or waits for you: the cards stay
+static bool busy;                // a job waits for you: the cards stay
 static bool pc_away;
 static bool clock_shown;
 static lv_timer_t *save_timer;
@@ -82,9 +82,9 @@ void screen_power_set_busy(bool on) {
     if (on == busy) return;
     busy = on;
     if (on) {
-        if (!pc_away) screen_power_wake(); // a job started (or waits): the cards, to show it
+        if (!pc_away) screen_power_wake(); // a job waits for you: the cards, to show it
     } else {
-        lv_display_trigger_activity(NULL); // the last one finished: the cards 2 min more, to see it done
+        lv_display_trigger_activity(NULL); // none waits any more: the cards 2 min more, to see how it went
     }
 }
 
