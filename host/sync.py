@@ -26,6 +26,9 @@ Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
 - weather and hourly: from Open-Meteo every 15 minutes, for --lat/--lon (none without them), fetched on
   a thread of its own so that a slow network can't hold up the rest. A failed fetch (no network yet at
   login, say) is tried again after 30 s, then 1, 2, 4, 8 and 15 min.
+- lock: whether the laptop's screen is locked (logind's LockedHint of your graphical session, watched with gdbus
+  monitor, else read every 2 s), at once when it changes and before the jobs whenever everything is sent: locked,
+  the board shows the clock and no chat's name.
 - ping: when nothing else went out for 10 s: the board takes the PC for away after 60 s of silence.
 When the board restarts (it prints "Setup done") or the port comes back, everything is sent again.
 What the board prints goes to this script's output (the journal, for the service): its errors and
@@ -39,8 +42,10 @@ import ctypes.util
 import json
 import os
 import queue
+import re
 import select
 import struct
+import subprocess
 import sys
 import threading
 import time
@@ -54,6 +59,7 @@ TIME_EVERY = 600     # s between time messages
 WEATHER_EVERY = 900  # s between weather fetches
 WEATHER_RETRY = 30   # s after a failed fetch till the next try (doubling each time, up to WEATHER_EVERY)
 PING_EVERY = 10      # s of silence before a ping
+LOCK_READ_EVERY = 2  # s between reads of the session's lock while gdbus monitor isn't there to say
 USAGE_ROWS = 2       # accounts the board's usage card has room for
 MAX_LINE = 8000      # bytes of a jobs message: the board drops a longer line whole (SERIAL_LINE_MAX, serial_link.cpp)
 MAX_JOBS = 64        # jobs in a jobs message: what the board follows for its alerts (SEEN_MAX, job_watch.c)
@@ -341,6 +347,119 @@ class WeatherWorker(threading.Thread):
                       f"weather: {exc}; again in {retry // 60} min")
 
 
+# ---------- the laptop's lock ----------
+#
+# logind keeps a LockedHint for each session, which the desktop sets while its screen is locked (Plasma and GNOME
+# both do). The board shows the clock while it's set, and no chat's name (the "lock" message).
+
+def parse_locked_hint(line):
+    """True or False from a gdbus monitor line that changes LockedHint, else None."""
+    m = re.search(r"'LockedHint': <(true|false)>", line)
+    return None if m is None else m.group(1) == "true"
+
+
+def logind(run, *args):
+    """What loginctl answers to args, stripped; "" when it can't (no logind, no loginctl, an error)."""
+    try:
+        done = run(["loginctl", *args], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return (done.stdout or "").strip() if done.returncode == 0 else ""
+
+
+def display_session(run=subprocess.run):
+    """The id of this user's graphical session: logind's Display for the user, else the user's session of class
+    user that runs Wayland or X11; None without one."""
+    shown = logind(run, "show-user", str(os.getuid()), "-p", "Display", "--value")
+    if shown:
+        return shown
+    for line in logind(run, "list-sessions", "--no-legend").splitlines():
+        words = line.split()
+        if len(words) < 2 or words[1] != str(os.getuid()):
+            continue
+        if (logind(run, "show-session", words[0], "-p", "Class", "--value") == "user"
+                and logind(run, "show-session", words[0], "-p", "Type", "--value") in ("wayland", "x11")):
+            return words[0]
+    return None
+
+
+class LockWatch:
+    """Whether the laptop's screen is locked (locked), and when that changes: a gdbus monitor of the session's
+    logind object (fileno() for select) says so at once; without one (it ended, or gdbus is missing), the value is
+    read every LOCK_READ_EVERY s. Without logind or a session: never locked, said once."""
+
+    def __init__(self, run=subprocess.run, popen=subprocess.Popen, clock=time.monotonic):
+        self.run, self.clock = run, clock
+        self.locked, self.proc, self.buf, self.next_read = False, None, b"", 0.0
+        self.session = display_session(run)
+        if self.session is None:
+            warn_once("lock: no logind session found; the display won't follow the laptop's lock")
+            return
+        self.locked = self.read() is True
+        try:
+            answer = run(["gdbus", "call", "--system", "--dest", "org.freedesktop.login1", "--object-path",
+                          "/org/freedesktop/login1", "--method", "org.freedesktop.login1.Manager.GetSession",
+                          self.session], capture_output=True, text=True, timeout=5).stdout or ""
+            m = re.search(r"objectpath '(/org/freedesktop/login1/session/[A-Za-z0-9_]+)'", answer)
+            if m:
+                self.proc = popen(["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1",
+                                   "--object-path", m.group(1)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                os.set_blocking(self.proc.stdout.fileno(), False)
+        except (OSError, subprocess.SubprocessError):
+            self.proc = None
+        if self.proc is None:
+            warn_once(f"lock: no gdbus monitor; reading the lock every {LOCK_READ_EVERY} s")
+
+    def read(self):
+        """The session's LockedHint now: True, False, or None when it can't be read."""
+        value = logind(self.run, "show-session", self.session, "-p", "LockedHint", "--value")
+        return {"yes": True, "no": False}.get(value)
+
+    def fileno(self):
+        return None if self.proc is None else self.proc.stdout.fileno()
+
+    def poll(self):
+        """Look for a change (the monitor's new lines, or a read when due); True when locked changed."""
+        if self.session is None:
+            return False
+        state = None
+        if self.proc is not None:
+            try:
+                data = os.read(self.proc.stdout.fileno(), 4096)
+            except BlockingIOError:
+                data = None
+            except OSError:
+                data = b""
+            if data == b"":  # it ended: read the value from now on
+                warn_once(f"lock: gdbus monitor ended; reading the lock every {LOCK_READ_EVERY} s")
+                self.proc.stdout.close()
+                self.proc = None
+            elif data:
+                self.buf += data
+                *lines, self.buf = self.buf.split(b"\n")
+                for line in lines:
+                    hint = parse_locked_hint(line.decode(errors="replace"))
+                    state = hint if hint is not None else state
+        if self.proc is None and self.clock() >= self.next_read:
+            self.next_read = self.clock() + LOCK_READ_EVERY
+            state = self.read()
+        if state is None or state == self.locked:
+            return False
+        self.locked = state
+        return True
+
+
+def send_everything(board, tz, locked, send_jobs, weather):
+    """What a board that knows nothing needs, the lock before any chat's name: the time, the lock, the jobs and
+    usage (send_jobs), and the weather if fetched."""
+    board.send("time", epoch=int(time.time()), tz=tz)
+    board.send("lock", locked=bool(locked))
+    send_jobs()
+    if weather:
+        board.send("weather", **weather[0])
+        board.send("hourly", **weather[1])
+
+
 # ---------- made-up examples (--demo) ----------
 
 def demo_rows(n, now):
@@ -443,6 +562,7 @@ def main():
         worker = WeatherWorker(args.lat, args.lon)
         worker.start()
     next_time = next_weather = 0.0
+    lock = LockWatch()
 
     def send_jobs(force=False):
         data = read_jobs(path)
@@ -462,19 +582,17 @@ def main():
     def send_all():
         """The board knows nothing (it just started, or the port came back): everything again."""
         nonlocal next_time
-        board.send("time", epoch=int(time.time()), tz=tz)
+        send_everything(board, tz, lock.locked, lambda: send_jobs(force=True), weather)
         next_time = time.time() + TIME_EVERY
-        send_jobs(force=True)
-        if weather:
-            board.send("weather", **weather[0])
-            board.send("hourly", **weather[1])
 
     send_all()
     while True:
         try:
-            ready, _, _ = select.select([f for f in (watch, board) if f.fileno() is not None], [], [], 1.0)
+            ready, _, _ = select.select([f for f in (watch, board, lock) if f.fileno() is not None], [], [], 1.0)
             if watch in ready and watch.changed(path.name):
                 send_jobs()
+            if lock.poll():
+                board.send("lock", locked=lock.locked)
             for line in board.lines():
                 print("board:", line)
                 if line == "Setup done":  # it restarted: it knows nothing
