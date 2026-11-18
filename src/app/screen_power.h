@@ -9,9 +9,10 @@ extern "C" {
 // What the screen shows and how bright, 24/7. Never dark, and the LCD always refreshed:
 // - the cards (at the slider's brightness) while someone looks: a touch in the last 2 min, a job
 //   waiting for you, or "Stay on" (a job working doesn't keep them: one can work for hours);
-// - else the clock face (ui/clock_face.c), dimmed to 10% (where the backlight doesn't hum), or at once after a
-//   double tap on the cards. A touch on it brings the cards back for 2 min;
-// - and only the clock face while the board is locked (app/board_lock.h: the laptop locked, or the PC away).
+// - else the clock face (ui/clock_face.c), at the slider's brightness too (you're at the laptop), or at once after
+//   a double tap on the cards. A touch on it brings the cards back for 2 min;
+// - and only the clock face while the board is locked (app/board_lock.h: the laptop locked, or the PC away),
+//   dimmed to 10% (where the backlight doesn't hum: app/screen_light.h).
 // The brightness and "Stay on" are saved (app/settings.cpp) and come back after a restart.
 
 // After screen_main_create(): the saved brightness and "Stay on" back, and the timer started.

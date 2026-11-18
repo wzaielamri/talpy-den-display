@@ -1,4 +1,5 @@
 #include "screen_power.h"
+#include "app/screen_light.h"
 #include "app/settings.h"
 #include "drivers/backlight.h"
 #include "lvgl.h"
@@ -11,10 +12,6 @@
 #include "ui/shade.h"
 
 #define CLOCK_AFTER_MS 120000 // no touch for this long (no job waiting for you, no "Stay on"): the clock
-// The clock face's brightness, in the slider's %: low enough that the backlight is silent. Its controller
-// (the STC8 at I2C 0x30) dims by PWM at a rate set in its own firmware, and the board hums from 99% down
-// to 12%; only 100% and the lowest levels are quiet. 10% is backlight value 242 (244 is dimmest).
-#define CLOCK_PERCENT  10
 #define SAVE_AFTER_MS  2000   // the slider still for this long: its value is saved (not every step of a drag)
 
 static int32_t brightness = 100; // the slider's value
@@ -26,8 +23,8 @@ static bool clock_shown;
 static lv_timer_t *save_timer;
 
 static void light(void) {
-    // (a slider set lower still keeps its own value: the clock is never brighter than the cards)
-    backlight_set_percent(clock_shown && brightness > CLOCK_PERCENT ? CLOCK_PERCENT : brightness);
+    // (the clock at the slider's brightness while you're there, dimmed to 10% while locked: app/screen_light.h)
+    backlight_set_percent(screen_light_percent(brightness, clock_shown, locked));
 }
 
 static void show_clock(bool on) {
@@ -100,6 +97,7 @@ void screen_power_set_locked(bool on) {
         locked = false;
         screen_power_wake(); // the cards, as after a touch
     }
+    light(); // (a clock already up dims on the lock; see app/screen_light.h)
 }
 
 bool screen_power_locked(void) {

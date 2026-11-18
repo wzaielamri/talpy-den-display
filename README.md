@@ -58,8 +58,9 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
 - **Brightness:** swipe down from the top for the brightness slider and a **Stay on** toggle. The
   board remembers both after a restart. Between about 12% and 99% the backlight hums quietly: its
   controller dims it by switching it on and off at an audible rate, which the code can't change.
-- **Clock face:** after 2 minutes without a touch, the screen switches to a big clock, dimmed
-  to 10%. It doesn't switch while a chat is waiting for you, or while Stay on is set (a chat that is
+- **Clock face:** after 2 minutes without a touch, the screen switches to a big clock, as bright as
+  the cards while you're at the laptop (unlocked and there: you see it at a glance), dimmed to 10% while
+  the laptop is locked or away (nobody looks, and it saves power). It doesn't switch while a chat is waiting for you, or while Stay on is set (a chat that is
   only working doesn't hold it: its line on the clock face says it works). It also
   shows the clock while the PC is away (no message for 60 s), and while the laptop is locked, so a
   board on a powered hub can stay on day and night. The clock moves a few pixels each minute so nothing

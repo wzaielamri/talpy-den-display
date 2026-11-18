@@ -26,7 +26,7 @@ void setup() {
     display_init();
 
     // The slider and "Stay on" (in the pull-down panel) go through screen_power: it keeps the
-    // brightness for the clock face's dimming and saves both across restarts.
+    // brightness for the cards and the clock face (dimmed while locked) and saves both across restarts.
     card_brightness_set_callback(screen_power_set_brightness);
     shade_set_stay_on_callback(screen_power_set_stay_on);
     screen_main_create();
