@@ -188,6 +188,22 @@ static void handle_power(JsonDocument &doc) {
     else if (strcmp(state, "wake") != 0) Serial.println("bad power: state sleep or wake");
 }
 
+// {"type":"lock","locked":true} when the laptop locks, false when it unlocks (sync.py, from logind; and in what
+// it sends at its start). Locked: the clock face, no alert, nothing that shows a chat's name; unlocked: the
+// cards, then the waiting alert you hadn't seen (job_watch.c). The board starts unlocked.
+static void handle_lock(JsonDocument &doc) {
+    if (!doc["locked"].is<bool>()) { Serial.println("bad lock: needs locked"); return; }
+    bool locked = doc["locked"].as<bool>();
+    if (locked) {
+        job_watch_set_locked(true); // (first: a waiting alert showing is owed, then it goes)
+        screen_power_set_locked(true);
+    } else {
+        screen_power_set_locked(false); // (first the cards, then the owed alert over them)
+        job_watch_set_locked(false);
+    }
+    debug_printf("lock(%d)\n", locked);
+}
+
 static void handle_line(const char *line) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, line);
@@ -214,6 +230,7 @@ static void handle_line(const char *line) {
     else if (strcmp(type, "jobs") == 0)    handle_jobs(doc);
     else if (strcmp(type, "usage") == 0)   handle_usage(doc);
     else if (strcmp(type, "hourly") == 0)  handle_hourly(doc);
+    else if (strcmp(type, "lock") == 0)    handle_lock(doc);
     else Serial.printf("unknown type: \"%s\"\n", type);
 }
 

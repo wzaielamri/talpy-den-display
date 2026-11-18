@@ -10,7 +10,7 @@ failed=0
 run_test() {
     name=$1
     shift
-    if ! gcc -std=c11 -Wall -Wextra -Werror -I src -I include -o "$out/$name" "test/native/$name.c" "$@"; then
+    if ! gcc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I src -I include -o "$out/$name" "test/native/$name.c" "$@"; then
         echo "FAIL (build): $name"
         failed=1
         return
@@ -29,5 +29,6 @@ run_test test_player src/ui/talpy_player.c
 run_test test_banner_text src/ui/banner_text.c
 run_test test_weather_view src/ui/weather_view.c
 run_test test_job_order src/ui/job_order.c
+run_test test_job_watch src/app/job_watch.c
 
 exit $failed

@@ -3,7 +3,7 @@
 extern "C" {
 #endif
 
-#include "lvgl.h"
+#include <stdbool.h> // (no LVGL type in what it offers: app/job_watch.c builds natively for its tests)
 
 // The alert: a box on a screen of its own, for a job. Two kinds:
 // - ALERT_WAITING: a job needs you (amber, Talpy asking for you: alert, sign, wave). It stays until OK is tapped or alert_hide().

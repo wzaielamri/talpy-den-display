@@ -22,6 +22,7 @@ static int32_t brightness = 100; // the slider's value
 static bool stay_on;
 static bool busy;                // a job waits for you: the cards stay
 static bool pc_away;
+static bool locked;              // the laptop is locked: the clock face, and nothing brings the cards back
 static bool clock_shown;
 static lv_timer_t *save_timer;
 
@@ -76,6 +77,7 @@ void screen_power_set_stay_on(bool on) {
 }
 
 void screen_power_wake(void) {
+    if (locked) return; // (a touch, a job waiting, an alert, the PC back: the clock stays till the unlock)
     lv_display_trigger_activity(NULL); // counts as a touch: the cards for CLOCK_AFTER_MS at least
     show_clock(false);
 }
@@ -99,6 +101,21 @@ void screen_power_pc_present(bool present) {
     } else {
         screen_power_wake();
     }
+}
+
+void screen_power_set_locked(bool on) {
+    if (on == locked) return;
+    if (on) {
+        locked = true;
+        show_clock(true);
+    } else {
+        locked = false;
+        screen_power_wake(); // the cards, as after a touch
+    }
+}
+
+bool screen_power_locked(void) {
+    return locked;
 }
 
 static void tick(lv_timer_t *timer) {

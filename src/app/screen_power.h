@@ -30,6 +30,12 @@ void screen_power_set_busy(bool on);
 // The cards now, for 2 min at least (a touch, an alert, the PC back).
 void screen_power_wake(void);
 
+// The laptop locked (true): the clock face, and it stays (a touch, a job waiting, "Stay on" or the PC coming
+// back don't bring the cards) till it's unlocked (false: the cards, as after a touch). It outlasts the PC going
+// away; a board that restarts starts unlocked (sync.py says otherwise within a second). Not saved.
+void screen_power_set_locked(bool locked);
+bool screen_power_locked(void);
+
 // The PC is there (a message came in after a while without) or away (none for a while, or it said
 // it suspends): away, the clock face, and an alert that shows goes.
 void screen_power_pc_present(bool present);
