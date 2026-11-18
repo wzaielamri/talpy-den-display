@@ -4,25 +4,11 @@ extern "C" {
 #endif
 
 #include "lvgl.h"
+#include "ui/job_info.h"
 #include <time.h>
 
 // Rows on the screen. With more jobs than this, a "+N more in Talpy Den" line shows under them.
 #define JOBS_ROWS 4
-
-// The three states the screen can show (one colour each).
-// Mapping Talpy Den's states (blocked, idle, stopped, failed, ...) onto these is up to the caller.
-typedef enum { JOB_WORKING, JOB_WAITING, JOB_DONE } job_state_t;
-
-// One job, as the PC sends it.
-typedef struct {
-    const char *name;
-    job_state_t state;
-    time_t since;         // when it got into this state, Unix seconds (UTC); 0: not known
-    const char *machine;  // where it runs, a small line under the name ("local", "lab (ssh)");
-                          // NULL or "": the name alone, on one line
-    const char *id;       // stable while the job is listed (jobs.json's "id"): job_watch.c tells a job's
-                          // state change by it; NULL or "": name and machine stand in
-} job_info_t;
 
 // Everything the jobs card shows, in one message.
 typedef struct {
@@ -40,8 +26,7 @@ void card_jobs_freeze(bool on);
 
 // Fill the whole card from the full job list:
 // - the banner (headline, counts, Talpy's mood) counts every job;
-// - the rows show waiting jobs first (they need you), then working, then done,
-//   keeping the PC's order within each state;
+// - the rows show the jobs in job_order's order (ui/job_order.h): waiting first, then the newest started;
 // - jobs that don't fit are counted in "+N more in Talpy Den" under the rows;
 // - each row says how long, from since and the board's clock, and keeps counting by itself:
 //   "waiting • 3m", "working • 2h", "done • 5m ago" (only the state word while either isn't known).

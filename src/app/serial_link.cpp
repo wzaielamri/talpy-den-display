@@ -55,6 +55,8 @@ static bool parse_state(const char *s, job_state_t *out) {
 // {"type":"jobs","updated":"14:52:05","rows":[{"name":"...","state":"waiting","since":1794145062},...]}
 // rows holds every job, not only 4: the card counts them all and picks what fits.
 // since: when the job got into its state, Unix seconds as a whole number (Talpy Den's ms / 1000).
+// started (optional): when the chat started, the same way (jobs.json's startedAt): the card's order
+// (ui/job_order.h) puts the newest started on top after the waiting ones; without it, since stands in.
 // machine (optional): where it runs, shown small under the name, e.g. "local" or "lab (ssh)".
 // id: stable while the job is listed (jobs.json's "id"): the alerts come from a job's state changing
 // from one jobs message to the next (job_watch.c), so no separate notify message is needed.
@@ -72,9 +74,10 @@ static void handle_jobs(JsonDocument &doc) {
             Serial.println("bad job: needs a name and state working, waiting or done");
             continue; // skip this one, keep the others
         }
-        long long since = row["since"] | 0LL; // missing or not a whole number: 0, not known
+        long long since = row["since"] | 0LL;     // missing or not a whole number: 0, not known
+        long long started = row["started"] | 0LL; // (the same; its since stands in for the order then)
         jobs.push_back({name, state, (time_t)(since > 0 ? since : 0), row["machine"].as<const char *>(),
-                        row["id"].as<const char *>()});
+                        row["id"].as<const char *>(), (time_t)(started > 0 ? started : 0)});
     }
 
     job_update_t u = {

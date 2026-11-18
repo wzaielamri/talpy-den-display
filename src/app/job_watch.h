@@ -1,5 +1,6 @@
 #pragma once
-#include "ui/card_jobs.h"
+#include "ui/job_info.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {

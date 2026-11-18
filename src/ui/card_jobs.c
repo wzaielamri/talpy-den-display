@@ -1,6 +1,7 @@
 #include "card_jobs.h"
 #include "app/clock.h"
 #include "banner_text.h"
+#include "job_order.h"
 #include "talpy.h"
 #include "talpy_set.h"
 #include "theme.h"
@@ -221,13 +222,12 @@ void card_jobs_set(const job_update_t *u) {
     snprintf(stamp, sizeof stamp, "updated %s", u->updated ? u->updated : "--:--:--");
     set_text_if_changed(jb_updated, stamp);
 
-    // Fill the rows from the top: waiting jobs first, then working, then done.
-    static const job_state_t order[] = {JOB_WAITING, JOB_WORKING, JOB_DONE};
+    // Fill the rows from the top, in job_order's order: waiting jobs first, then the newest started.
+    static int order[64];
+    int ordered = job_order(u->jobs, n < 64 ? n : 64, order);
     int shown = 0;
-    for (int k = 0; k < 3; k++)
-        for (int i = 0; i < n && shown < JOBS_ROWS; i++)
-            if (u->jobs[i].state == order[k])
-                show_row(shown++, &u->jobs[i]);
+    for (int k = 0; k < ordered && shown < JOBS_ROWS; k++)
+        show_row(shown++, &u->jobs[order[k]]);
     for (int i = shown; i < JOBS_ROWS; i++)
         lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN);
     update_dividers();

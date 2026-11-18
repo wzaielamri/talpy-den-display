@@ -230,6 +230,9 @@ def jobs_rows(data):
         since = number(job.get("since"))
         if since is not None:
             row["since"] = int(since // 1000)
+        started = number(job.get("startedAt"))  # (the board's order: the newest started first)
+        if started is not None:
+            row["started"] = int(started // 1000)
         rows.append(row)
     return fit_rows(rows)
 
