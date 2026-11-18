@@ -21,6 +21,11 @@ void alert_hide(void);
 void alert_motion_hold(bool shade_out);
 bool alert_is_showing(void); // (OK closes it without telling anyone: ask)
 
+// "Open on PC", next to OK on both kinds: calls cb (job_watch.c asks the PC to bring the alert's job to the
+// front), then the alert goes.
+typedef void (*alert_open_cb_t)(void);
+void alert_on_open(alert_open_cb_t cb);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

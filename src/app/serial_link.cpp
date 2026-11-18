@@ -12,6 +12,7 @@
 #include "ui/header_pc.h"
 #include "ui/clock_face.h"
 #include "app/screen_power.h"
+#include "app/pc_open.h"
 #include "debug_log.h"
 
 static void handle_time(JsonDocument &doc) {
@@ -204,6 +205,14 @@ static void handle_lock(JsonDocument &doc) {
     debug_printf("lock(%d)\n", locked);
 }
 
+// {"type":"opened","id":"...","ok":true,"message":"..."}: the PC's answer to the board's {"type":"open","id":...}
+// (a tap on a chat: app/pc_open.h). message: what happened, as Talpy Den's jump.py --job says it (plain ASCII).
+static void handle_opened(JsonDocument &doc) {
+    const char *id = doc["id"].as<const char *>();
+    if (!id) { Serial.println("bad opened: needs id"); return; }
+    pc_open_answer(id, doc["ok"] | false, doc["message"] | "");
+}
+
 static void handle_line(const char *line) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, line);
@@ -231,6 +240,7 @@ static void handle_line(const char *line) {
     else if (strcmp(type, "usage") == 0)   handle_usage(doc);
     else if (strcmp(type, "hourly") == 0)  handle_hourly(doc);
     else if (strcmp(type, "lock") == 0)    handle_lock(doc);
+    else if (strcmp(type, "opened") == 0)  handle_opened(doc);
     else Serial.printf("unknown type: \"%s\"\n", type);
 }
 

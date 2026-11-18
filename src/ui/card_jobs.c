@@ -6,6 +6,7 @@
 #include "talpy_set.h"
 #include "theme.h"
 #include "ui_common.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -43,6 +44,21 @@ static lv_timer_t *top_timer;    // the list back to the top, TOP_AFTER_MS after
 static job_state_t row_state[JOBS_MAX];
 static time_t row_since[JOBS_MAX];
 static char row_key[JOBS_MAX][KEY_MAX]; // its id, or name@machine without one (as job_watch.c)
+static char row_id[JOBS_MAX][KEY_MAX];  // its id ("" without one: the row can't be tapped)
+
+// A tap on a row asks the PC to bring its job up (app/pc_open.h). The id is taken when the finger lands, so a
+// jobs message that moves the rows before it lifts can't change which job opens.
+#define RESULT_MS 4000 // how long "Opened" or why not stays on the row
+#define NOTE_W    200  // the right side's width while it says that (the name gives way)
+#define NAME_W    280
+static card_jobs_open_cb_t open_cb;
+static char pressed_id[KEY_MAX];
+// What a row says in place of its state for a while, one at a time (one open at a time): "Opening...", then the
+// answer for RESULT_MS. Shown on whichever shown row has note_id, so on none once that job is gone.
+static char note_id[KEY_MAX];
+static char note_text[96];
+static uint32_t note_color;
+static lv_timer_t *note_timer;
 
 static uint32_t state_color(job_state_t s) {
     switch (s) {
@@ -70,7 +86,19 @@ static count_pair_t make_count_pair(lv_obj_t *row, uint32_t color) {
 }
 
 // Spec: 432 x 48, one under the other in the list, no background, padding 0, 1 px divider at the bottom.
-static job_row_t make_job_row(lv_obj_t *parent) {
+static void row_pressed(lv_event_t *e) {
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    snprintf(pressed_id, sizeof pressed_id, "%s", row_id[i]);
+}
+
+// LVGL sends no click after a scroll: a swipe over the rows opens nothing.
+static void row_clicked(lv_event_t *e) {
+    LV_UNUSED(e);
+    if (pressed_id[0] && open_cb) open_cb(pressed_id);
+    pressed_id[0] = 0;
+}
+
+static job_row_t make_job_row(lv_obj_t *parent, int i) {
     job_row_t r;
     r.row = lv_obj_create(parent);
     lv_obj_set_size(r.row, lv_pct(100), 48);
@@ -80,14 +108,20 @@ static job_row_t make_job_row(lv_obj_t *parent) {
     lv_obj_set_style_border_side(r.row, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_border_color(r.row, lv_color_hex(COLOR_LINE), 0);
     lv_obj_set_style_border_width(r.row, 1, 0);
-    // (not clickable: a touch lands on the list, which scrolls)
-    lv_obj_remove_flag(r.row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    // Spec: pressed, the tile colour. Tappable (it asks the PC to bring its job up); a drag on it scrolls the list
+    // (not scrollable itself, it passes the scroll on).
+    lv_obj_set_style_bg_color(r.row, lv_color_hex(COLOR_TILE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(r.row, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_remove_flag(r.row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(r.row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(r.row, row_pressed, LV_EVENT_PRESSED, (void *)(intptr_t)i);
+    lv_obj_add_event_cb(r.row, row_clicked, LV_EVENT_CLICKED, NULL);
 
     r.dot = make_blob(r.row, 0, 18, 12, 12, LV_RADIUS_CIRCLE, COLOR_WORKING);
 
     // Fixed one-line height: LONG_DOT only adds "..." when the text overflows the height.
     r.name = make_label(r.row, &lv_font_montserrat_24, COLOR_TEXT, "");
-    lv_obj_set_size(r.name, 280, lv_font_get_line_height(&lv_font_montserrat_24));
+    lv_obj_set_size(r.name, NAME_W, lv_font_get_line_height(&lv_font_montserrat_24));
     lv_label_set_long_mode(r.name, LV_LABEL_LONG_DOT);
     lv_obj_align(r.name, LV_ALIGN_TOP_LEFT, 24, 10);
 
@@ -99,6 +133,8 @@ static job_row_t make_job_row(lv_obj_t *parent) {
     lv_obj_add_flag(r.machine, LV_OBJ_FLAG_HIDDEN);
 
     r.state = make_label(r.row, &lv_font_montserrat_14, COLOR_WORKING, "");
+    lv_label_set_long_mode(r.state, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(r.state, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align(r.state, LV_ALIGN_RIGHT_MID, 0, 0);
     return r;
 }
@@ -158,9 +194,23 @@ static void format_age(char *buf, size_t size, job_state_t state, long long age)
 // Row i's right side: "waiting • 3m", or the state word alone while since or the clock isn't known.
 // Sets the text only when it changed: the 10 s refresh then redraws nothing most of the time.
 static void update_state_text(int i) {
-    char text[40];
+    char text[96];
     time_t now = time(NULL);
-    if (row_since[i] > 0 && now >= CLOCK_SET) {
+    bool note = note_id[0] && strcmp(row_id[i], note_id) == 0;
+    // The right side: content-wide for the state, NOTE_W (dotted) for a note, the name giving way to it.
+    int32_t state_w = note ? NOTE_W : LV_SIZE_CONTENT, name_w = note ? 432 - 24 - NOTE_W - 8 : NAME_W;
+    if (lv_obj_get_style_width(rows[i].state, 0) != state_w) {
+        lv_obj_set_width(rows[i].state, state_w);
+        lv_obj_set_height(rows[i].state, lv_font_get_line_height(&lv_font_montserrat_14));
+        lv_obj_set_width(rows[i].name, name_w);
+        lv_obj_align(rows[i].state, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+    lv_color_t c = lv_color_hex(note ? note_color : state_color(row_state[i]));
+    if (!lv_color_eq(lv_obj_get_style_text_color(rows[i].state, 0), c))
+        lv_obj_set_style_text_color(rows[i].state, c, 0);
+    if (note) {
+        snprintf(text, sizeof text, "%s", note_text);
+    } else if (row_since[i] > 0 && now >= CLOCK_SET) {
         char age[16];
         long long secs = (long long)(now - row_since[i]);
         format_age(age, sizeof age, row_state[i], secs < 0 ? 0 : secs); // (the PC's clock a bit ahead)
@@ -189,9 +239,13 @@ static void job_key(const job_info_t *j, char *out, size_t size) {
 }
 
 static void show_row(int i, const job_info_t *job) {
-    if (i >= made) rows[made++] = make_job_row(jb_list); // (in order: rows[i] only after rows[i-1])
+    if (i >= made) {
+        rows[made] = make_job_row(jb_list, made); // (in order: rows[i] only after rows[i-1])
+        made++;
+    }
     job_row_t *r = &rows[i];
     job_key(job, row_key[i], KEY_MAX);
+    snprintf(row_id[i], KEY_MAX, "%s", job->id ? job->id : "");
     lv_color_t c = lv_color_hex(state_color(job->state));
     bool two_lines = job->machine && job->machine[0];
 
@@ -206,8 +260,7 @@ static void show_row(int i, const job_info_t *job) {
     } else {
         lv_obj_add_flag(r->machine, LV_OBJ_FLAG_HIDDEN);
     }
-    lv_obj_set_style_text_color(r->state, c, 0);
-    update_state_text(i);
+    update_state_text(i); // (its text and colour, a note's while one shows for this job)
     lv_obj_remove_flag(r->row, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -270,6 +323,54 @@ void card_jobs_set(const job_update_t *u) {
     } else {
         lv_obj_add_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+void card_jobs_on_open(card_jobs_open_cb_t cb) {
+    open_cb = cb;
+}
+
+// The shown rows of note_id say their note, or their state again.
+static void refresh_note_rows(const char *id) {
+    for (int i = 0; i < shown; i++)
+        if (strcmp(row_id[i], id) == 0) update_state_text(i);
+}
+
+static void note_timeout(lv_timer_t *timer) {
+    LV_UNUSED(timer);
+    note_timer = NULL; // (a one-shot timer: LVGL deletes it after this)
+    char id[KEY_MAX];
+    snprintf(id, sizeof id, "%s", note_id);
+    note_id[0] = 0;
+    refresh_note_rows(id);
+}
+
+static void set_note(const char *id, const char *text, uint32_t color, bool lasts) {
+    if (note_timer) {
+        lv_timer_delete(note_timer);
+        note_timer = NULL;
+    }
+    if (note_id[0] && strcmp(note_id, id) != 0) { // (another job's note goes)
+        char old[KEY_MAX];
+        snprintf(old, sizeof old, "%s", note_id);
+        note_id[0] = 0;
+        refresh_note_rows(old);
+    }
+    snprintf(note_id, sizeof note_id, "%s", id);
+    snprintf(note_text, sizeof note_text, "%s", text);
+    note_color = color;
+    refresh_note_rows(note_id);
+    if (!lasts) {
+        note_timer = lv_timer_create(note_timeout, RESULT_MS, NULL);
+        lv_timer_set_repeat_count(note_timer, 1);
+    }
+}
+
+void card_jobs_opening(const char *id) {
+    if (id && id[0]) set_note(id, "Opening...", COLOR_MUTED, true);
+}
+
+void card_jobs_open_result(const char *id, bool ok, const char *message) {
+    if (id && id[0]) set_note(id, ok ? "Opened" : message ? message : "", ok ? COLOR_DONE : COLOR_MUTED, false);
 }
 
 void card_jobs_scroll_top(void) {

@@ -1,4 +1,5 @@
 #include "job_watch.h"
+#include "app/pc_open.h"
 #include "app/screen_power.h"
 #include "ui/alert.h"
 #include <stdio.h>
@@ -136,4 +137,13 @@ void job_watch_set_locked(bool on) {
                         .machine = first->machine, .id = first->id, .started = 0};
         show(ALERT_WAITING, &j, first->id);
     }
+}
+
+// The alert's "Open on PC": the PC brings up the alert's job (the alert goes by itself after).
+static void open_alerted(void) {
+    pc_open_request(alert_id);
+}
+
+void job_watch_init(void) {
+    alert_on_open(open_alerted);
 }

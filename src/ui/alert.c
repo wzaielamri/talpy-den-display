@@ -13,7 +13,8 @@
 // comes back as it was.
 static lv_obj_t *alert_scr; // NULL until the first alert
 static lv_obj_t *back_to;   // the screen it took the place of
-static lv_obj_t *box, *al_talpy, *al_kicker, *al_name, *al_detail, *ok;
+static lv_obj_t *box, *al_talpy, *al_kicker, *al_name, *al_detail, *ok, *al_open, *al_open_text;
+static alert_open_cb_t open_cb;
 static bool showing;
 static bool shade_out; // the pull-down shade is out: it can be over this screen too, so Talpy holds still
 static alert_kind_t shown_kind;
@@ -21,6 +22,17 @@ static lv_timer_t *done_timer;
 
 static void ok_clicked(lv_event_t *e) {
     LV_UNUSED(e);
+    alert_hide();
+}
+
+void alert_on_open(alert_open_cb_t cb) {
+    open_cb = cb;
+}
+
+// "Open on PC": the PC brings the alert's job up (job_watch.c), and the alert goes.
+static void open_clicked(lv_event_t *e) {
+    LV_UNUSED(e);
+    if (open_cb) open_cb();
     alert_hide();
 }
 
@@ -85,6 +97,20 @@ static void create(void) {
     lv_obj_add_event_cb(ok, ok_clicked, LV_EVENT_CLICKED, NULL);
     lv_obj_t *ok_text = make_label(ok, &lv_font_montserrat_24, COLOR_BG, "OK");
     lv_obj_center(ok_text);
+
+    // Spec: al_open, "Open on PC", 52 px high as OK and 180 wide, 16 px left of it; outlined (2 px border and its
+    // text in the kind's colour, no fill), so OK stays the main one.
+    al_open = lv_button_create(box);
+    lv_obj_set_size(al_open, 180, 52);
+    lv_obj_align_to(al_open, ok, LV_ALIGN_OUT_LEFT_MID, -16, 0);
+    lv_obj_set_style_radius(al_open, 12, 0);
+    lv_obj_set_style_shadow_width(al_open, 0, 0);
+    lv_obj_set_style_bg_opa(al_open, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(al_open, LV_OPA_20, LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(al_open, 2, 0);
+    lv_obj_add_event_cb(al_open, open_clicked, LV_EVENT_CLICKED, NULL);
+    al_open_text = make_label(al_open, &lv_font_montserrat_24, COLOR_WAIT, "Open on PC");
+    lv_obj_center(al_open_text);
 }
 
 // The kind's colours: waiting amber, done green.
@@ -94,6 +120,9 @@ static void paint(alert_kind_t kind) {
     lv_obj_set_style_border_color(box, c, 0);
     lv_obj_set_style_text_color(al_kicker, c, 0);
     lv_obj_set_style_bg_color(ok, c, 0);
+    lv_obj_set_style_border_color(al_open, c, 0);
+    lv_obj_set_style_bg_color(al_open, c, LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(al_open_text, c, 0);
 }
 
 bool alert_is_showing(void) {

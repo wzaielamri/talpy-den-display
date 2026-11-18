@@ -11,6 +11,13 @@
 #include "drivers/backlight.h"
 #include "drivers/display.h"
 #include "drivers/board.h"
+#include "app/job_watch.h"
+#include "app/pc_open.h"
+#include "ui/card_jobs.h"
+
+static void open_row(const char *id) {
+    pc_open_request(id); // (false: one under way, or locked: the tap does nothing)
+}
 
 void setup() {
 
@@ -24,6 +31,9 @@ void setup() {
     shade_set_stay_on_callback(screen_power_set_stay_on);
     screen_main_create();
     screen_power_init(); // the saved brightness and "Stay on" back
+    // A tap on a chat (its row, or "Open on PC" on an alert): the PC brings it up (app/pc_open.h).
+    card_jobs_on_open(open_row);
+    job_watch_init();
     clock_start();
 
     Serial.println("Setup done");

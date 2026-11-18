@@ -36,6 +36,18 @@ void card_jobs_freeze(bool on);
 // Call from the LVGL loop (loop()/serial handler), never from another task.
 void card_jobs_set(const job_update_t *u);
 
+// A tap on a job's row (one with an id): cb gets the id of the row the finger landed on (main.cpp asks the
+// PC to bring it up, app/pc_open.h). A swipe opens nothing.
+typedef void (*card_jobs_open_cb_t)(const char *id);
+void card_jobs_on_open(card_jobs_open_cb_t cb);
+
+// The row of the job with this id says "Opening..." in place of its state, till card_jobs_open_result.
+void card_jobs_opening(const char *id);
+
+// Then "Opened" (green) or message (muted, dotted to the row) for 4 s, then its state again. Shown on the row
+// that has this id at the time: on none if the job is gone.
+void card_jobs_open_result(const char *id, bool ok, const char *message);
+
 // The list back to its top (the jobs that need you): also by itself 30 s after the last touch on it, and
 // when the clock face shows (screen_power.c), so the cards always come back at the top.
 void card_jobs_scroll_top(void);

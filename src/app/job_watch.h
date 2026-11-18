@@ -21,6 +21,9 @@ void job_watch_update(const job_info_t *jobs, int n);
 // its waiting alert, if it still waits; finished alerts from meanwhile are dropped.
 void job_watch_set_locked(bool locked);
 
+// At setup: the alert's "Open on PC" asks the PC to bring up the alert's job (app/pc_open.h).
+void job_watch_init(void);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif

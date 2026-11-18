@@ -39,8 +39,9 @@ void screen_main_create(void) {
     lv_obj_set_style_bg_color(card_wx, lv_color_hex(COLOR_TILE), LV_STATE_PRESSED);
 
     // A double tap on the screen shows the clock face at once (screen_power.c), not 2 min later. The
-    // usage and jobs cards do nothing with a tap, so theirs go through to the screen (and the header's
-    // to the pull-down's zone, which counts them too: shade.c); the weather card keeps its own.
+    // usage card and the jobs card's banner do nothing with a tap, so theirs go through to the screen (and the
+    // header's to the pull-down's zone, which counts them too: shade.c); the weather card keeps its own, and so
+    // does the jobs list (it scrolls, and a tap on a chat asks the PC to bring it up: card_jobs.c).
     lv_obj_remove_flag(card_use, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(card_jobs, LV_OBJ_FLAG_CLICKABLE);
     double_tap_watch(screen);

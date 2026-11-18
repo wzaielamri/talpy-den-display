@@ -28,6 +28,15 @@ void alert_hide(void) {
 bool alert_is_showing(void) { return showing; }
 void screen_power_wake(void) {}
 
+// The alert's "Open on PC" (what job_watch_init registers) and what it asks the PC for.
+static alert_open_cb_t open_cb;
+static char opened[96];
+void alert_on_open(alert_open_cb_t cb) { open_cb = cb; }
+bool pc_open_request(const char *id) {
+    snprintf(opened, sizeof opened, "%s", id ? id : "");
+    return true;
+}
+
 static job_info_t J(const char *id, job_state_t state, time_t since) {
     job_info_t j = {.name = id, .state = state, .since = since, .machine = "local", .id = id, .started = 0};
     return j;
@@ -134,7 +143,20 @@ static void test_unlocked_alerts_as_before(void) {
     CHECK(!showing || shown_kind == ALERT_DONE);
 }
 
+static void test_open_on_pc_opens_the_alerts_job(void) {
+    reset();
+    job_watch_init();
+    CHECK(open_cb != NULL);
+    job_info_t waits[] = {J("A", JOB_WORKING, 50), J("lab:.claude/b/live", JOB_WAITING, 100)};
+    job_watch_update(waits, 2);
+    CHECK(shows == 1);
+    opened[0] = 0;
+    if (open_cb) open_cb();
+    CHECK(strcmp(opened, "lab:.claude/b/live") == 0);
+}
+
 int main(void) {
+    test_open_on_pc_opens_the_alerts_job();
     test_alert_hidden_by_lock_comes_back();
     test_waiting_while_locked_shows_on_unlock();
     test_answered_while_locked_not_shown();
