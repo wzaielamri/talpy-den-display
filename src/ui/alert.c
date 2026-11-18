@@ -29,11 +29,20 @@ void alert_on_open(alert_open_cb_t cb) {
     open_cb = cb;
 }
 
-// "Open on PC": the PC brings the alert's job up (job_watch.c), and the alert goes.
+// "Open on PC": the PC brings the alert's job up (job_watch.c), and the alert goes; it stays if the PC couldn't
+// be asked (an open under way).
 static void open_clicked(lv_event_t *e) {
     LV_UNUSED(e);
-    if (open_cb) open_cb();
+    if (!open_cb || !open_cb()) return;
     alert_hide();
+}
+
+void alert_show_open(bool on) {
+    if (!al_open) return;
+    if (on)
+        lv_obj_remove_flag(al_open, LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_add_flag(al_open, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void done_timeout(lv_timer_t *timer) {

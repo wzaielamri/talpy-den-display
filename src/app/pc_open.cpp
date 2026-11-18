@@ -6,7 +6,7 @@
 #include "ui/card_jobs.h"
 
 #define OPEN_WAIT_MS 20000 // the PC's answer at the latest (sync.py gives jump.py 15 s)
-#define ID_MAX       96    // as job_watch.c and card_jobs.c keep an id
+#define ID_MAX       160   // as job_watch.c and card_jobs.c keep an id (with its 0)
 
 static char pending[ID_MAX]; // the id under way; "" while none
 static lv_timer_t *wait_timer;
@@ -22,7 +22,7 @@ static void give_up(lv_timer_t *timer) {
 }
 
 bool pc_open_request(const char *id) {
-    if (!id || !id[0] || strlen(id) >= ID_MAX || pending[0] || screen_power_locked()) return false;
+    if (!id || !id[0] || strlen(id) >= ID_MAX - 1 || pending[0] || screen_power_locked()) return false;
     // ArduinoJson writes it, so an id with a quote or a backslash still makes one valid JSON line.
     JsonDocument doc;
     doc["type"] = "open";

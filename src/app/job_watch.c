@@ -7,7 +7,7 @@
 #include <time.h>
 
 #define SEEN_MAX 64 // jobs remembered from one message to the next (sync.py's MAX_JOBS); more are left out: no alerts
-#define ID_MAX   96
+#define ID_MAX   160 // a job's id kept (with its 0): one this long or longer can't be opened from here (cut short)
 #define TEXT_MAX 48 // a name or machine kept for an alert owed till the unlock (sync.py cuts names at 40)
 
 typedef struct {
@@ -16,7 +16,8 @@ typedef struct {
     time_t since;
     char name[TEXT_MAX];
     char machine[TEXT_MAX];
-    bool owed; // waits, and its waiting alert wasn't seen: the lock hid it, or it came while locked
+    bool owed;     // waits, and its waiting alert wasn't seen: the lock hid it, or it came while locked
+    bool openable; // it has an id that fits (id_fits): "Open on PC" for its alert
 } seen_t;
 
 static seen_t seen[SEEN_MAX];
@@ -25,6 +26,13 @@ static bool started;             // a first message came already (before: no "fi
 static char alert_id[ID_MAX];    // the job of the alert job_watch showed last
 static alert_kind_t alert_kind;
 static bool locked; // the laptop is locked: no alert (they show a chat's name); owed ones show on unlock
+static bool alert_openable; // the alert's job has an id the PC can be asked for
+
+// Whether a job's id can go to the PC: there is one (name@machine stands in for none, which the PC can't know),
+// and it fits ID_MAX whole (a cut one would name another chat, or none).
+static bool id_fits(const char *id) {
+    return id && id[0] && strlen(id) < ID_MAX - 1;
+}
 
 // The job's id, or name and machine standing in for it.
 static void job_key(const job_info_t *j, char *out, size_t size) {
@@ -58,6 +66,8 @@ static void show(alert_kind_t kind, const job_info_t *j, const char *id) {
     if (!alert_show(kind, "", j->name, detail)) return; // (a finished one while a waiting one shows)
     snprintf(alert_id, sizeof alert_id, "%s", id);
     alert_kind = kind;
+    alert_openable = id_fits(j->id);
+    alert_show_open(alert_openable);
     screen_power_wake(); // a dark screen mustn't hide it
 }
 
@@ -108,6 +118,7 @@ void job_watch_update(const job_info_t *jobs, int n) {
         snprintf(s->name, TEXT_MAX, "%s", j->name ? j->name : "");
         snprintf(s->machine, TEXT_MAX, "%s", j->machine ? j->machine : "");
         s->owed = owed[i];
+        s->openable = id_fits(j->id);
     }
     started = true;
 }
@@ -134,14 +145,14 @@ void job_watch_set_locked(bool on) {
     }
     if (first) {
         job_info_t j = {.name = first->name, .state = JOB_WAITING, .since = first->since,
-                        .machine = first->machine, .id = first->id, .started = 0};
+                        .machine = first->machine, .id = first->openable ? first->id : "", .started = 0};
         show(ALERT_WAITING, &j, first->id);
     }
 }
 
-// The alert's "Open on PC": the PC brings up the alert's job (the alert goes by itself after).
-static void open_alerted(void) {
-    pc_open_request(alert_id);
+// The alert's "Open on PC": the PC brings up the alert's job; false (the alert stays) if it couldn't be asked.
+static bool open_alerted(void) {
+    return alert_openable && pc_open_request(alert_id);
 }
 
 void job_watch_init(void) {

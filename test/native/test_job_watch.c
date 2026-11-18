@@ -30,11 +30,51 @@ void screen_power_wake(void) {}
 
 // The alert's "Open on PC" (what job_watch_init registers) and what it asks the PC for.
 static alert_open_cb_t open_cb;
-static char opened[96];
+static char opened[256];
+static int requests;
+static bool pc_free = true; // (false: an open under way, so the PC is asked nothing)
+static bool open_shown = true;
 void alert_on_open(alert_open_cb_t cb) { open_cb = cb; }
+void alert_show_open(bool on) { open_shown = on; }
 bool pc_open_request(const char *id) {
+    requests++;
     snprintf(opened, sizeof opened, "%s", id ? id : "");
-    return true;
+    return pc_free;
+}
+
+static void test_open_hidden_without_a_usable_id(void) {
+    char long_id[201];
+    memset(long_id, 'a', 200);
+    long_id[200] = 0;
+    memcpy(long_id + 190, "/x/live", 8); // (a container on a host with a long name: more than the board keeps)
+    job_info_t no_id = {.name = "named", .state = JOB_WAITING, .since = 100, .machine = "local", .id = "", .started = 0};
+    job_info_t too_long = {.name = "long", .state = JOB_WAITING, .since = 100, .machine = "x", .id = long_id, .started = 0};
+    job_info_t fine = {.name = "fine", .state = JOB_WAITING, .since = 100, .machine = "x", .id = "lab:.c/a/live", .started = 0};
+    const job_info_t *cases[] = {&no_id, &too_long};
+    for (int k = 0; k < 2; k++) {
+        job_watch_set_locked(false);
+        job_watch_update(NULL, 0);
+        showing = false;
+        requests = 0;
+        job_watch_update(cases[k], 1);
+        CHECK(showing && !open_shown);
+        CHECK(open_cb && !open_cb() && requests == 0); // (nothing cut short or made up goes to the PC)
+    }
+    job_watch_update(NULL, 0);
+    showing = false;
+    job_watch_update(&fine, 1);
+    CHECK(showing && open_shown);
+}
+
+static void test_open_refused_keeps_the_alert(void) {
+    job_watch_update(NULL, 0);
+    showing = false;
+    job_info_t waits = {.name = "w", .state = JOB_WAITING, .since = 100, .machine = "x", .id = "lab:.c/w/live", .started = 0};
+    job_watch_update(&waits, 1);
+    pc_free = false;
+    CHECK(open_cb && !open_cb()); // (the alert stays: alert.c hides it only when the PC was asked)
+    pc_free = true;
+    CHECK(open_cb && open_cb());
 }
 
 static job_info_t J(const char *id, job_state_t state, time_t since) {
@@ -157,6 +197,8 @@ static void test_open_on_pc_opens_the_alerts_job(void) {
 
 int main(void) {
     test_open_on_pc_opens_the_alerts_job();
+    test_open_hidden_without_a_usable_id();
+    test_open_refused_keeps_the_alert();
     test_alert_hidden_by_lock_comes_back();
     test_waiting_while_locked_shows_on_unlock();
     test_answered_while_locked_not_shown();

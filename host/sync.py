@@ -216,10 +216,15 @@ URGENCY = {"waiting": 0, "working": 1, "done": 2}
 
 def fit_rows(rows):
     """rows as one message can hold them (MAX_JOBS jobs, MAX_LINE bytes). When there are too many the least
-    urgent go: done ones, then working ones, the later ones first. The card's counts then miss them."""
+    urgent go: done ones, then working ones, the oldest started first. The card's counts then miss them."""
     budget = MAX_LINE - 100  # (the message's own type and time)
     kept = set()
-    for i in sorted(range(len(rows)), key=lambda i: URGENCY[rows[i]["state"]]):
+    def keep_first(i):  # (waiting: the one asking longest first; the others: the newest started first, as the board)
+        row = rows[i]
+        if row["state"] == "waiting":
+            return 0, row.get("since") or 0
+        return URGENCY[row["state"]], -(row.get("started") or row.get("since") or 0)
+    for i in sorted(range(len(rows)), key=keep_first):
         budget -= len(json.dumps(rows[i], separators=(",", ":"))) + 1
         if len(kept) == MAX_JOBS or budget < 0:
             break
@@ -473,20 +478,49 @@ def send_everything(board, tz, locked, send_jobs, weather):
 # The board prints {"type":"open","id":"<id>"} when a chat is tapped (its row, or "Open on PC" on an alert). This
 # script answers {"type":"opened","id":...,"ok":...,"message":...} after Talpy Den's jump.py --job brought it to the
 # front (or said why not). The board's line is only trusted to name a chat: an id that isn't exactly one of the
-# jobs file's, or that a jobs file id can't be (ID_BAD), runs nothing; the rest goes to jump.py as one argument,
+# jobs file's, or hasn't a jobs file id's shape (ID_SHAPE), runs nothing; the rest goes to jump.py as one argument,
 # never through a shell, and jump.py again only looks it up.
 
-ID_BAD = re.compile(r"""[\s"'\\;|&$`<>]""")
+# [<host>:]<profile>/<id>/<kind>[/shared] in letters, digits and _ . @ : + - (no blank, quote, shell or glob character)
+ID_SHAPE = re.compile(r"(?:[A-Za-z0-9_.@][A-Za-z0-9_.@:-]*:)?[A-Za-z0-9_.+-]+/[A-Za-z0-9_.-]+/(?:live|job|chat)(?:/shared)?")
 TALPY_CODE = (".local/share/plasma/plasmoids/org.wzaielamri.talpyden/contents/code",
               ".local/share/gnome-shell/extensions/talpy-den@wzaielamri.github.io/code")
 NOT_LISTED = "That chat isn't listed any more"
 
 
 def id_ok(job_id):
-    """Whether job_id can be a jobs file id: printable ASCII, at most ID_MAX, no blank, quote, backslash or shell
-    character, no "..", not starting with "-" (Talpy Den's jump.py checks the same)."""
-    return (isinstance(job_id, str) and 0 < len(job_id) <= ID_MAX and job_id.isascii() and job_id.isprintable()
-            and not ID_BAD.search(job_id) and ".." not in job_id and not job_id.startswith("-"))
+    """Whether job_id has a jobs file id's shape (ID_SHAPE), at most ID_MAX, without ".." and not starting with "-"
+    (Talpy Den's jump.py --job checks the same)."""
+    return (isinstance(job_id, str) and len(job_id) <= ID_MAX and ID_SHAPE.fullmatch(job_id) is not None
+            and ".." not in job_id and not job_id.startswith("-"))
+
+
+def open_log(job_id, ok, message):
+    """The log line of an open: the id only if it's a chat id (the board's line may hold anything, a newline too)."""
+    shown = job_id if id_ok(job_id) else "(not a chat id)"
+    return f"open {shown}: {'ok' if ok else 'failed'} {message}".rstrip()
+
+
+# What jump.py needs to show a window, from the user's systemd manager: a service started at login, before the
+# desktop told the manager its display, hasn't them (KDE and GNOME import them there once they run).
+DESKTOP_KEYS = ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_CURRENT_DESKTOP", "XDG_SESSION_DESKTOP",
+                "XDG_SESSION_TYPE", "DESKTOP_SESSION", "KDE_FULL_SESSION", "KDE_SESSION_VERSION",
+                "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR")
+
+
+def desktop_env(base=None, run=subprocess.run):
+    """base (this process's environment) with the desktop's display variables as the user's systemd manager has
+    them now; base alone without one."""
+    env = dict(os.environ if base is None else base)
+    try:
+        out = run(["systemctl", "--user", "show-environment"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return env
+    for line in (out or "").splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key in DESKTOP_KEYS and not value.startswith("$'"):  # ($'...': quoted, not a plain value)
+            env[key] = value
+    return env
 
 
 def board_request(line):
@@ -556,8 +590,8 @@ class Opener:
     """Runs jump.py for one open at a time on a thread of its own, so a slow one holds up nothing; each answer goes
     to results as (job_id, ok, message), the message plain ASCII and at most 80 characters (it's shown on a row)."""
 
-    def __init__(self, run=subprocess.run):
-        self.run, self.results, self.thread = run, queue.Queue(), None
+    def __init__(self, run=subprocess.run, environment=desktop_env):
+        self.run, self.environment, self.results, self.thread = run, environment, queue.Queue(), None
 
     def start(self, job_id, code):
         if self.thread is not None and self.thread.is_alive():
@@ -569,7 +603,8 @@ class Opener:
     def _open(self, job_id, code):
         try:
             ok, message = jump_answer(self.run(jump_command(code, job_id), capture_output=True, text=True,
-                                               timeout=JUMP_TIMEOUT, stdin=subprocess.DEVNULL))
+                                               timeout=JUMP_TIMEOUT, stdin=subprocess.DEVNULL,
+                                               env=self.environment()))
         except subprocess.TimeoutExpired:
             ok, message = False, "Talpy Den took too long"
         except OSError:
@@ -684,7 +719,7 @@ def main():
     listed = set()  # the jobs file's ids (send_jobs)
 
     def answer(job_id, ok, message):
-        print(f"open {job_id}: {'ok' if ok else 'failed'} {message}".rstrip())
+        print(open_log(job_id, ok, message))
         board.send("opened", id=job_id, ok=bool(ok), message=message)
 
     def send_jobs(force=False):

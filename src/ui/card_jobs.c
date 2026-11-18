@@ -38,7 +38,7 @@ static int shown;                // rows shown now: rows[0 .. shown-1]
 static lv_timer_t *top_timer;    // the list back to the top, TOP_AFTER_MS after the last touch on it
 
 #define TOP_AFTER_MS 30000
-#define KEY_MAX 96 // a job's id as job_watch.c keeps it (ID_MAX there)
+#define KEY_MAX 160 // a job's id kept (with its 0), as job_watch.c (ID_MAX there): one this long or longer isn't tappable
 
 // What each shown row is about, kept so its "how long" moves on without a new message, and which job it is.
 static job_state_t row_state[JOBS_MAX];
@@ -89,6 +89,8 @@ static count_pair_t make_count_pair(lv_obj_t *row, uint32_t color) {
 static void row_pressed(lv_event_t *e) {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     snprintf(pressed_id, sizeof pressed_id, "%s", row_id[i]);
+    lv_timer_reset(top_timer); // (a touch on a row is a touch on the list: back to the top 30 s after it)
+    lv_timer_resume(top_timer);
 }
 
 // LVGL sends no click after a scroll: a swipe over the rows opens nothing.
@@ -245,7 +247,9 @@ static void show_row(int i, const job_info_t *job) {
     }
     job_row_t *r = &rows[i];
     job_key(job, row_key[i], KEY_MAX);
-    snprintf(row_id[i], KEY_MAX, "%s", job->id ? job->id : "");
+    // (an id that doesn't fit whole isn't kept: cut short it would name another chat, or none; the row isn't tappable)
+    bool fits = job->id && strlen(job->id) < KEY_MAX - 1;
+    snprintf(row_id[i], KEY_MAX, "%s", fits ? job->id : "");
     lv_color_t c = lv_color_hex(state_color(job->state));
     bool two_lines = job->machine && job->machine[0];
 

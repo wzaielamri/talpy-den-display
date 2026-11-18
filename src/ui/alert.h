@@ -22,9 +22,12 @@ void alert_motion_hold(bool shade_out);
 bool alert_is_showing(void); // (OK closes it without telling anyone: ask)
 
 // "Open on PC", next to OK on both kinds: calls cb (job_watch.c asks the PC to bring the alert's job to the
-// front), then the alert goes.
-typedef void (*alert_open_cb_t)(void);
+// front); the alert goes if cb says the PC was asked (true), else it stays (an open already under way).
+typedef bool (*alert_open_cb_t)(void);
 void alert_on_open(alert_open_cb_t cb);
+
+// "Open on PC" shown (true) or not, for the alert showing now (job_watch.c: not for a job without a usable id).
+void alert_show_open(bool on);
 
 #ifdef __cplusplus
 } /*extern "C"*/

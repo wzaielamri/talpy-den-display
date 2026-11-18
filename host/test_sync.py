@@ -154,7 +154,54 @@ HOST_ID = "podman:web:.claude/0b1c2d3e-aaaa-bbbb-cccc-1234567890ab/job"
 BAD_IDS = ["a;b/c/live", ".claude-work/$(id)/live", ".claude-work/`id`/live", ".claude-work/a b/live",
            '.claude-work/"x/live', ".claude-work/x'/live", ".claude-work/x\n/live", "../x/y/live", "-x/y/live",
            "x" * 301, "lab:../a/b/live", "", "a|b/c/live", "a&b/c/live", "a>b/c/live", "a\\b/c/live",
-           ".claude-work/Grüße/live"]
+           ".claude-work/Grüße/live",
+           # (glob characters: Talpy Den would take the id's middle as a pattern for a transcript's path)
+           ".claude-work/*/live", ".claude-work/?/live", ".claude-work/[ab]/live", ".claude-work/a{b,c}/live",
+           ".claude-work/~x/live", "lab*:.claude/a/live", "only/two"]
+
+
+class SafetyFixTests(unittest.TestCase):
+    MANAGER = ("WAYLAND_DISPLAY=wayland-0\nDISPLAY=:0\nXDG_CURRENT_DESKTOP=KDE\nLANG=de_DE.UTF-8\n"
+               "XAUTHORITY=/run/user/1000/xauth_abc\nWEIRD=$'a\\nb'\n")
+
+    def test_desktop_env_from_the_user_manager(self):
+        run = lambda argv, **k: types.SimpleNamespace(returncode=0, stdout=self.MANAGER)  # noqa: E731
+        env = sync.desktop_env({"PATH": "/usr/bin", "HOME": "/h", "DISPLAY": ":9"}, run)
+        self.assertEqual((env["WAYLAND_DISPLAY"], env["DISPLAY"], env["XDG_CURRENT_DESKTOP"]), ("wayland-0", ":0", "KDE"))
+        self.assertEqual((env["PATH"], env["HOME"]), ("/usr/bin", "/h"))
+        self.assertNotIn("LANG", env)   # (only what a window needs)
+        self.assertNotIn("WEIRD", env)
+
+    def test_desktop_env_without_a_manager(self):
+        def fail(argv, **k):
+            raise FileNotFoundError(argv[0])
+        self.assertEqual(sync.desktop_env({"PATH": "/usr/bin"}, fail), {"PATH": "/usr/bin"})
+
+    def test_opener_runs_jump_with_the_desktop_env(self):
+        seen = {}
+
+        def run(argv, **k):
+            seen.update(k.get("env") or {})
+            return types.SimpleNamespace(returncode=0, stdout='{"ok": true, "message": ""}', stderr="")
+        opener = sync.Opener(run=run, environment=lambda: {"WAYLAND_DISPLAY": "wayland-0", "PATH": "/usr/bin"})
+        opener.start(LOCAL_ID, Path("/c"))
+        opener.thread.join(5)
+        self.assertEqual(seen.get("WAYLAND_DISPLAY"), "wayland-0")
+
+    def test_fit_rows_drops_the_oldest_started_first(self):
+        many = [job(id=f".claude/{i:032x}/live", name="n" * 40, startedAt=1794140000000 + i * 1000)
+                for i in range(200)]
+        many.append(job(id=".claude/waits/live", state="waiting", startedAt=1))
+        rows = sync.jobs_rows({"jobs": many})
+        self.assertIn(".claude/waits/live", [r["id"] for r in rows])  # (the one waiting first)
+        kept = sorted(r["started"] for r in rows if r["state"] == "working")
+        self.assertEqual(kept[-1], 1794140000 + 199)  # the newest started is kept...
+        self.assertGreater(kept[0], 1794140000 + 100)  # ...and the oldest ones went
+
+    def test_open_log_line(self):
+        self.assertEqual(sync.open_log(LOCAL_ID, True, "Switched to it"), f"open {LOCAL_ID}: ok Switched to it")
+        line = sync.open_log("x\nforged: line\x1b[2J", False, "That chat isn't listed any more")
+        self.assertEqual(line, "open (not a chat id): failed That chat isn't listed any more")
 
 
 class FakeOpener:
