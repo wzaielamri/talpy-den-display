@@ -28,12 +28,13 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
   by when they started, the newest first, so a row stays where it is when its chat finishes. Each says
   where it runs (`local`, `lab (ssh)`, `web (podman)`) and for how long. The list goes back to the top
   30 s after you last touched it, and when a chat starts waiting. While a chat waits, the banner turns amber.
-- **Tap a chat** to bring it to the front on the laptop, as a click on its row in Talpy Den does (its
-  terminal tab, tmux pane or VS Code; a background chat opens attached; an SSH host's or a container's
-  through Talpy Den's own command for it). The row says "Opening..." and then "Opened", or why not. It
-  needs a Talpy Den with `jump.py --job` (else the row says "Talpy Den is too old for this").
   Talpy, the mole, sits in the banner and acts out the mood: he waves a sign when a chat needs you,
   types, thinks or reads while chats work, and sleeps when they're done. (The old pulsing border is gone.)
+- **Tap a chat** to bring it to the front on the laptop, as a click on its row in Talpy Den does: its
+  Talpy Chat window if it's open, else its terminal tab, tmux pane or VS Code (a background chat opens
+  attached; an SSH host's or a container's through Talpy Den's own command for it). The row says
+  "Opening..." and then "Opened", or why not. It needs a Talpy Den with `jump.py --job` (else the row
+  says "Talpy Den is too old for this").
 - **Alerts:** a full-screen alert when a chat starts waiting for you (stays until you tap OK), and a
   shorter one when a chat finishes (15 s). Talpy peeks over the top of the box: with his sign for a
   waiting chat, jumping in confetti for a finished one. **Open on PC** next to OK brings that chat to
