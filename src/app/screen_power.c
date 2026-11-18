@@ -5,6 +5,7 @@
 #include "ui/alert.h"
 #include "ui/card_brightness.h"
 #include "ui/card_hourly.h"
+#include "ui/card_jobs.h"
 #include "ui/clock_face.h"
 #include "ui/double_tap.h"
 #include "ui/motion.h"
@@ -37,6 +38,7 @@ static void show_clock(bool on) {
     shade_allow(!on);
     if (on) {
         card_hourly_hide();
+        card_jobs_scroll_top(); // (the jobs that need you on top when the cards come back)
         clock_face_show();
     } else {
         clock_face_hide();

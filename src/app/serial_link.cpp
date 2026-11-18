@@ -89,6 +89,13 @@ static void handle_jobs(JsonDocument &doc) {
     card_jobs_counts(&u, &waiting, &working, &done);
     clock_face_set_chats(true, waiting, working, done); // (the clock face's chat line)
     debug_printf("card_jobs_set(%d jobs)\n", u.count);
+    // A row is made for each job (up to JOBS_MAX) and kept: what's left after a new most, to check 64 fit.
+    static int most;
+    if (u.count > most) {
+        most = u.count;
+        debug_printf("free heap %u (internal %u), largest block %u\n", (unsigned)ESP.getFreeHeap(),
+                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)ESP.getMaxAllocHeap());
+    }
 
     // A job waiting for you: the cards stay. A working one doesn't hold them (one can work for hours, on
     // another machine too): the clock face's chat line shows how many work.

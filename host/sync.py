@@ -6,7 +6,7 @@
     python3 host/sync.py --port /dev/ttyUSB1    # another port
     python3 host/sync.py --dry-run              # print the messages, send nothing
     python3 host/sync.py --debug                # send them and print them too
-    python3 host/sync.py --demo                 # send made-up examples once, to try the board
+    python3 host/sync.py --demo [N]             # send made-up examples once, to try the board (N chats, 12)
 
 Your place stays out of the repository, in ~/.config/desk-display.env (the systemd service reads it too);
 left empty, there is no weather:
@@ -343,17 +343,34 @@ class WeatherWorker(threading.Thread):
 
 # ---------- made-up examples (--demo) ----------
 
-def demo(board):
+def demo_rows(n, now):
+    """n made-up chats (1 to MAX_JOBS) for --demo: every state, a host's, and one whose name and id hold a
+    quote (the board's open line must escape it). Enough of them make the jobs card's list scroll."""
+    first = [  # (name, state, since minutes ago, started minutes ago, machine)
+        ("desk-display-gadget", "waiting", 3, 20, "local"),
+        ("quick-chat-next", "working", 12, 15, "local"),
+        ("fix-serial-parser", "working", 41, 90, "lab (ssh)"),
+        ("release-notes", "done", 5, 30, "local"),
+        ("talpy-den-docs", "done", 60, 120, "local"),
+        ('say "hi" back', "waiting", 1, 50, "web (podman)"),
+    ]
+    rows = []
+    for i in range(max(1, min(n, MAX_JOBS))):
+        if i < len(first):
+            name, state, since, started, machine = first[i]
+        else:
+            name, state = f"demo-chat-{i + 1}", ("working", "done", "done")[i % 3]
+            since, started, machine = 7 * i, 30 + 9 * i, ("local", "lab (ssh)", "web (podman)")[i % 3]
+        rows.append({"id": f'd"{i + 1}' if '"' in name else f"d{i + 1}", "name": name, "state": state,
+                     "since": now - since * 60, "started": now - started * 60, "machine": machine})
+    return rows
+
+
+def demo(board, n=12):
     now = int(time.time())
     board.send("time", epoch=now, tz=local_tz())
     board.send("weather", temp=12, hi=14, lo=7, code=2, day=True, updated="14:45")
-    board.send("jobs", updated=time.strftime("%H:%M:%S"), rows=[
-        {"id": "1", "name": "desk-display-gadget", "state": "waiting", "since": now - 3 * 60, "machine": "local"},
-        {"id": "2", "name": "quick-chat-next", "state": "working", "since": now - 12 * 60, "machine": "local"},
-        {"id": "3", "name": "fix-serial-parser", "state": "working", "since": now - 41 * 60, "machine": "lab (ssh)"},
-        {"id": "4", "name": "release-notes", "state": "done", "since": now - 5 * 60, "machine": "local"},
-        {"id": "5", "name": "talpy-den-docs", "state": "done", "since": now - 60 * 60, "machine": "local"},
-    ])
+    board.send("jobs", updated=time.strftime("%H:%M:%S"), rows=demo_rows(n, now))
     board.send("usage", accounts=[
         {"name": "personal", "plan": "Pro", "five_hour": 40, "seven_day": 84,
          "five_hour_resets": now + 3 * 3600, "seven_day_resets": now + 4 * 86400},
@@ -402,13 +419,14 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="print the messages instead of sending them")
     ap.add_argument("--debug", action="store_true", default=os.environ.get("DESK_DEBUG") == "1",
                     help="print every message sent (off by default: a ping every 10 s fills the journal)")
-    ap.add_argument("--demo", action="store_true", help="send made-up examples once and stop")
+    ap.add_argument("--demo", nargs="?", type=int, const=12, default=None, metavar="N",
+                    help="send made-up examples once and stop (N chats, 12 unless given; 64 at most)")
     args = ap.parse_args()
 
     board = Board(args.port, args.dry_run, args.debug)
     board.connect()
-    if args.demo:
-        demo(board)
+    if args.demo is not None:
+        demo(board, args.demo)
         time.sleep(0.5)
         return
     if args.lat is None or args.lon is None:

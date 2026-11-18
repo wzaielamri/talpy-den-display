@@ -42,5 +42,22 @@ class JobsRowsTests(unittest.TestCase):
         self.assertTrue(all("started" in r for r in rows))
 
 
+class DemoTests(unittest.TestCase):
+    def test_demo_rows(self):
+        rows = sync.demo_rows(12, 1794145062)
+        self.assertEqual(len(rows), 12)
+        self.assertEqual({r["state"] for r in rows}, {"waiting", "working", "done"})
+        self.assertTrue(any(r["machine"].endswith("(ssh)") for r in rows))
+        self.assertTrue(any('"' in r["name"] and '"' in r["id"] for r in rows))  # (the board's JSON, escaped)
+        self.assertTrue(all(r["started"] <= 1794145062 for r in rows))
+
+    def test_demo_rows_64_fit_one_message(self):
+        rows = sync.demo_rows(64, 1794145062)
+        self.assertEqual(len(rows), 64)
+        self.assertEqual(len({r["id"] for r in rows}), 64)
+        line = json.dumps({"type": "jobs", "updated": "14:52:05", "rows": rows}, separators=(",", ":"))
+        self.assertLessEqual(len(line), sync.MAX_LINE)
+
+
 if __name__ == "__main__":
     unittest.main()

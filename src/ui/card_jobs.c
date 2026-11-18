@@ -28,14 +28,21 @@ static lv_obj_t *banner;
 static lv_obj_t *banner_headline_label;
 static lv_obj_t *banner_talpy;
 static lv_obj_t *jb_updated;
-static lv_obj_t *jb_more;
+static lv_obj_t *jb_list;  // the rows, one under the other, in a list that scrolls
 static lv_obj_t *jb_empty; // in the rows' place: "No jobs right now" while none
 static count_pair_t pair_wait, pair_work, pair_done;
-static job_row_t rows[JOBS_ROWS];
+static job_row_t rows[JOBS_MAX]; // made as jobs come (row is NULL till then), kept hidden when they go
+static int made;                 // rows made so far
+static int shown;                // rows shown now: rows[0 .. shown-1]
+static lv_timer_t *top_timer;    // the list back to the top, TOP_AFTER_MS after the last touch on it
 
-// What each shown row is about, kept so its "how long" moves on without a new message.
-static job_state_t row_state[JOBS_ROWS];
-static time_t row_since[JOBS_ROWS];
+#define TOP_AFTER_MS 30000
+#define KEY_MAX 96 // a job's id as job_watch.c keeps it (ID_MAX there)
+
+// What each shown row is about, kept so its "how long" moves on without a new message, and which job it is.
+static job_state_t row_state[JOBS_MAX];
+static time_t row_since[JOBS_MAX];
+static char row_key[JOBS_MAX][KEY_MAX]; // its id, or name@machine without one (as job_watch.c)
 
 static uint32_t state_color(job_state_t s) {
     switch (s) {
@@ -62,19 +69,18 @@ static count_pair_t make_count_pair(lv_obj_t *row, uint32_t color) {
     return p;
 }
 
-// Spec: 432 x 48 at (0, 124 + 48*i), no background, padding 0, 1 px divider at the bottom.
-static job_row_t make_job_row(lv_obj_t *parent, int i) {
+// Spec: 432 x 48, one under the other in the list, no background, padding 0, 1 px divider at the bottom.
+static job_row_t make_job_row(lv_obj_t *parent) {
     job_row_t r;
     r.row = lv_obj_create(parent);
     lv_obj_set_size(r.row, lv_pct(100), 48);
-    lv_obj_set_pos(r.row, 0, 124 + 48 * i);
     lv_obj_set_style_bg_opa(r.row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_radius(r.row, 0, 0);
     lv_obj_set_style_pad_all(r.row, 0, 0);
     lv_obj_set_style_border_side(r.row, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_border_color(r.row, lv_color_hex(COLOR_LINE), 0);
     lv_obj_set_style_border_width(r.row, 1, 0);
-    // (not clickable: a tap goes through to the screen, which counts double taps: screen_main.c)
+    // (not clickable: a touch lands on the list, which scrolls)
     lv_obj_remove_flag(r.row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     r.dot = make_blob(r.row, 0, 18, 12, 12, LV_RADIUS_CIRCLE, COLOR_WORKING);
@@ -97,12 +103,10 @@ static job_row_t make_job_row(lv_obj_t *parent, int i) {
     return r;
 }
 
-// Divider under every shown row except the last shown one.
+// Divider under every shown row except the last one.
 static void update_dividers(void) {
-    for (int i = 0; i < JOBS_ROWS; i++) {
-        bool next_shown = i + 1 < JOBS_ROWS && !lv_obj_has_flag(rows[i + 1].row, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_style_border_width(rows[i].row, next_shown ? 1 : 0, 0);
-    }
+    for (int i = 0; i < shown; i++)
+        lv_obj_set_style_border_width(rows[i].row, i + 1 < shown ? 1 : 0, 0);
 }
 
 void card_jobs_freeze(bool on) {
@@ -171,14 +175,23 @@ static void update_state_text(int i) {
 // Every 10 s: the shown rows' "how long" moves on by itself, between the PC's messages.
 static void age_tick(lv_timer_t *timer) {
     LV_UNUSED(timer);
-    for (int i = 0; i < JOBS_ROWS; i++)
-        if (!lv_obj_has_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN))
-            update_state_text(i);
+    for (int i = 0; i < shown; i++)
+        update_state_text(i);
 }
 
 // Row i: coloured dot, name with where it runs under it, and "<state> • <how long>" on the right.
+// A job's key, as job_watch.c keys it: its id, or name@machine without one.
+static void job_key(const job_info_t *j, char *out, size_t size) {
+    if (j->id && j->id[0])
+        snprintf(out, size, "%s", j->id);
+    else
+        snprintf(out, size, "%s@%s", j->name ? j->name : "", j->machine ? j->machine : "");
+}
+
 static void show_row(int i, const job_info_t *job) {
+    if (i >= made) rows[made++] = make_job_row(jb_list); // (in order: rows[i] only after rows[i-1])
     job_row_t *r = &rows[i];
+    job_key(job, row_key[i], KEY_MAX);
     lv_color_t c = lv_color_hex(state_color(job->state));
     bool two_lines = job->machine && job->machine[0];
 
@@ -210,11 +223,20 @@ void card_jobs_counts(const job_update_t *u, int *waiting, int *working, int *do
     }
 }
 
-void card_jobs_set(const job_update_t *u) {
-    if (!u || !jb_more) return; // no data, or card not created yet
-    int n = u->jobs ? u->count : 0;
+// Whether this key was a waiting row's before the rows are filled again (rows[0 .. shown-1] are still the last
+// message's then).
+static bool was_waiting(const char *key) {
+    for (int i = 0; i < shown; i++)
+        if (row_state[i] == JOB_WAITING && strcmp(row_key[i], key) == 0) return true;
+    return false;
+}
 
-    // The banner counts every job, also the ones that don't get a row.
+void card_jobs_set(const job_update_t *u) {
+    if (!u || !jb_list) return; // no data, or card not created yet
+    int n = u->jobs ? u->count : 0;
+    if (n > JOBS_MAX) n = JOBS_MAX; // (sync.py sends no more)
+
+    // The banner counts every job.
     int working, waiting, done;
     card_jobs_counts(u, &waiting, &working, &done);
     set_banner(true, waiting, working, done);
@@ -222,31 +244,50 @@ void card_jobs_set(const job_update_t *u) {
     snprintf(stamp, sizeof stamp, "updated %s", u->updated ? u->updated : "--:--:--");
     set_text_if_changed(jb_updated, stamp);
 
-    // Fill the rows from the top, in job_order's order: waiting jobs first, then the newest started.
-    static int order[64];
-    int ordered = job_order(u->jobs, n < 64 ? n : 64, order);
-    int shown = 0;
-    for (int k = 0; k < ordered && shown < JOBS_ROWS; k++)
-        show_row(shown++, &u->jobs[order[k]]);
-    for (int i = shown; i < JOBS_ROWS; i++)
-        lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN);
-    update_dividers();
-
-    int more = working + waiting + done - shown;
-    if (more > 0) {
-        lv_label_set_text_fmt(jb_more, "+%d more in Talpy Den", more);
-        lv_obj_remove_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
-        // (a divider under the last row too, or "+N more" reads as one more line of that job)
-        lv_obj_set_style_border_width(rows[shown - 1].row, 1, 0);
-    } else {
-        lv_obj_add_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
+    // A job that started waiting since the last message: the list back to its top, where it is.
+    bool new_waiting = false;
+    char key[KEY_MAX];
+    for (int i = 0; i < n && !new_waiting; i++) {
+        if (u->jobs[i].state != JOB_WAITING) continue;
+        job_key(&u->jobs[i], key, sizeof key);
+        new_waiting = !was_waiting(key);
     }
+
+    // Fill the rows from the top, in job_order's order: waiting jobs first, then the newest started. The list
+    // keeps where it was scrolled (only a job starting to wait takes it to the top).
+    static int order[JOBS_MAX];
+    int ordered = job_order(u->jobs, n, order);
+    for (int k = 0; k < ordered; k++)
+        show_row(k, &u->jobs[order[k]]);
+    for (int i = ordered; i < made; i++)
+        lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN);
+    shown = ordered;
+    update_dividers();
+    if (new_waiting) card_jobs_scroll_top();
 
     if (shown == 0) {
         lv_obj_remove_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(jb_empty, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+void card_jobs_scroll_top(void) {
+    if (!jb_list) return;
+    lv_obj_scroll_to_y(jb_list, 0, LV_ANIM_ON);
+    if (top_timer) lv_timer_pause(top_timer);
+}
+
+static void top_timeout(lv_timer_t *timer) {
+    LV_UNUSED(timer);
+    card_jobs_scroll_top();
+}
+
+// A touch on the list, or a scroll that ends: back to the top TOP_AFTER_MS later, unless touched again.
+static void list_touched(lv_event_t *e) {
+    LV_UNUSED(e);
+    lv_timer_reset(top_timer);
+    lv_timer_resume(top_timer);
 }
 
 // Spec: the banner, 432 x 116 at (0, 0), radius 12, padding 0, 2 px border (amber, shown only while a chat
@@ -292,15 +333,25 @@ static void make_banner(lv_obj_t *parent) {
 void card_jobs_create(lv_obj_t *parent) {
     make_banner(parent);
 
-    for (int i = 0; i < JOBS_ROWS; i++) {
-        rows[i] = make_job_row(parent, i);
-        lv_obj_add_flag(rows[i].row, LV_OBJ_FLAG_HIDDEN); // (till the PC's first message)
-    }
-
-    // Spec: under the rows, lined up with the job names. Hidden while every job has a row.
-    jb_more = make_label(parent, &lv_font_montserrat_14, COLOR_MUTED, "");
-    lv_obj_align(jb_more, LV_ALIGN_BOTTOM_LEFT, 24, 0);
-    lv_obj_add_flag(jb_more, LV_OBJ_FLAG_HIDDEN);
+    // Spec: jb_list, the rows' place under the banner, 432 x 212 at (0, 124): transparent, no padding, the rows
+    // one under the other (a hidden row takes no room), scrolling up and down only, its scrollbar showing only
+    // while it scrolls. Clickable, or LVGL wouldn't let a finger scroll it: so a tap there doesn't reach the
+    // screen's double tap (the clock face), as on the weather card. Rows are made as jobs come (show_row).
+    jb_list = lv_obj_create(parent);
+    lv_obj_set_pos(jb_list, 0, 124);
+    lv_obj_set_size(jb_list, 432, 212);
+    lv_obj_set_style_bg_opa(jb_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(jb_list, 0, 0);
+    lv_obj_set_style_radius(jb_list, 0, 0);
+    lv_obj_set_style_pad_all(jb_list, 0, 0);
+    lv_obj_set_style_pad_row(jb_list, 0, 0);
+    lv_obj_set_flex_flow(jb_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scroll_dir(jb_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(jb_list, LV_SCROLLBAR_MODE_ACTIVE);
+    lv_obj_add_event_cb(jb_list, list_touched, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(jb_list, list_touched, LV_EVENT_SCROLL_END, NULL);
+    top_timer = lv_timer_create(top_timeout, TOP_AFTER_MS, NULL);
+    lv_timer_pause(top_timer);
 
     lv_timer_create(age_tick, 10000, NULL);
 
