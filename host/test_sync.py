@@ -1,6 +1,7 @@
 """Tests for sync.py's pure parts: python3 -m unittest discover -s host -p 'test_*.py' (from the repository)."""
 import importlib.util
 import json
+import subprocess
 import sys
 import types
 import unittest
@@ -146,6 +147,117 @@ class LockTests(unittest.TestCase):
         board = types.SimpleNamespace(send=lambda type_, **fields: sent.append(type_))
         sync.send_everything(board, "CET-1", True, lambda: board.send("jobs"), None)
         self.assertEqual(sent[:3], ["time", "lock", "jobs"])
+
+
+LOCAL_ID = ".claude-work/0b1c2d3e-aaaa-bbbb-cccc-1234567890ab/live"
+HOST_ID = "podman:web:.claude/0b1c2d3e-aaaa-bbbb-cccc-1234567890ab/job"
+BAD_IDS = ["a;b/c/live", ".claude-work/$(id)/live", ".claude-work/`id`/live", ".claude-work/a b/live",
+           '.claude-work/"x/live', ".claude-work/x'/live", ".claude-work/x\n/live", "../x/y/live", "-x/y/live",
+           "x" * 301, "lab:../a/b/live", "", "a|b/c/live", "a&b/c/live", "a>b/c/live", "a\\b/c/live",
+           ".claude-work/Grüße/live"]
+
+
+class FakeOpener:
+    def __init__(self, free=True):
+        self.free, self.started = free, []
+
+    def start(self, job_id, code):
+        if self.free:
+            self.started.append((job_id, code))
+        return self.free
+
+
+class OpenTests(unittest.TestCase):
+    def test_board_request(self):
+        self.assertEqual(sync.board_request('{"type":"open","id":"%s"}' % LOCAL_ID), LOCAL_ID)
+        for line in ('{"type":"ping"}', "not json", '["open"]', '{"type":"open","id":5}', '{"type":"open"}',
+                     '{"type":"open","id":"%s"}' % ("x" * 1010), "PC back", "Setup done"):
+            with self.subTest(line=line[:40]):
+                self.assertIsNone(sync.board_request(line))
+
+    def test_id_ok(self):
+        for bad in BAD_IDS:
+            with self.subTest(job_id=bad[:40]):
+                self.assertFalse(sync.id_ok(bad))
+        self.assertTrue(sync.id_ok(LOCAL_ID))
+        self.assertTrue(sync.id_ok(HOST_ID))
+
+    def test_jump_command_is_a_list(self):
+        cmd = sync.jump_command(Path("/opt/td/code"), LOCAL_ID)
+        self.assertEqual(cmd, ["python3", "-I", "/opt/td/code/jump.py", "--job", LOCAL_ID])
+
+    def test_code_folder(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self.assertIsNone(sync.code_folder({}, home))
+            for version in ("1.9.0", "1.21.0", "1.20.0"):
+                code = home / f".vscode/extensions/wzaielamri.talpy-den-{version}/vendor/code"
+                code.mkdir(parents=True)
+                (code / "jump.py").write_text("")
+            self.assertEqual(sync.code_folder({}, home).parent.parent.name, "wzaielamri.talpy-den-1.21.0")
+            plasma = home / ".local/share/plasma/plasmoids/org.wzaielamri.talpyden/contents/code"
+            plasma.mkdir(parents=True)
+            (plasma / "jump.py").write_text("")
+            self.assertEqual(sync.code_folder({}, home), plasma)
+            mine = home / "td/code"
+            mine.mkdir(parents=True)
+            (mine / "jump.py").write_text("")
+            self.assertEqual(sync.code_folder({"DESK_TALPY_CODE": str(mine)}, home), mine)
+            self.assertIsNone(sync.code_folder({"DESK_TALPY_CODE": str(home / "nothing")}, home))
+
+    def test_open_answers(self):
+        code, listed = Path("/opt/td/code"), {LOCAL_ID, HOST_ID}
+        opener = FakeOpener()
+        self.assertEqual(sync.handle_open(".claude-work/other/live", listed, False, code, opener),
+                         (False, "That chat isn't listed any more"))
+        for bad in BAD_IDS:
+            self.assertEqual(sync.handle_open(bad, listed | {bad}, False, code, opener)[0], False)
+        self.assertEqual(sync.handle_open(LOCAL_ID, listed, True, code, opener), (False, "The PC is locked"))
+        self.assertEqual(sync.handle_open(LOCAL_ID, listed, False, None, opener), (False, "Talpy Den not found"))
+        self.assertEqual(opener.started, [])
+        self.assertIsNone(sync.handle_open(HOST_ID, listed, False, code, opener))
+        self.assertEqual(opener.started, [(HOST_ID, code)])
+        self.assertEqual(sync.handle_open(LOCAL_ID, listed, False, code, FakeOpener(free=False)),
+                         (False, "Still opening the last one"))
+
+    def opener_answer(self, run):
+        opener = sync.Opener(run=run)
+        self.assertTrue(opener.start(LOCAL_ID, Path("/opt/td/code")))
+        opener.thread.join(5)
+        return opener.results.get_nowait()
+
+    def test_opener_answers(self):
+        def done(code, out="", err=""):
+            return lambda *a, **k: types.SimpleNamespace(returncode=code, stdout=out, stderr=err)
+
+        self.assertEqual(self.opener_answer(done(0, '{"ok": true, "message": "Switched to it"}\n')),
+                         (LOCAL_ID, True, "Switched to it"))
+        job_id, ok, message = self.opener_answer(done(0, json.dumps({"ok": False, "message": "x" * 200 + "é"})))
+        self.assertFalse(ok)
+        self.assertTrue(message.isascii() and len(message) == 80)
+        self.assertEqual(self.opener_answer(done(1, err="usage: jump.py [--stop ...")),
+                         (LOCAL_ID, False, "Talpy Den is too old for this"))
+
+        def slow(*a, **k):
+            raise subprocess.TimeoutExpired(a[0], k.get("timeout"))
+        self.assertEqual(self.opener_answer(slow), (LOCAL_ID, False, "Talpy Den took too long"))
+        self.assertEqual(sync.JUMP_TIMEOUT, 15)
+
+    def test_opener_one_at_a_time(self):
+        import threading
+        go = threading.Event()
+
+        def wait(*a, **k):
+            go.wait(5)
+            return types.SimpleNamespace(returncode=0, stdout='{"ok": true, "message": ""}', stderr="")
+        opener = sync.Opener(run=wait)
+        self.assertTrue(opener.start(LOCAL_ID, Path("/c")))
+        self.assertFalse(opener.start(HOST_ID, Path("/c")))
+        go.set()
+        opener.thread.join(5)
+        self.assertTrue(opener.start(HOST_ID, Path("/c")))
+        opener.thread.join(5)
 
 
 if __name__ == "__main__":

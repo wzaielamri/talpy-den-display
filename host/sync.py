@@ -15,6 +15,8 @@ left empty, there is no weather:
     DESK_LON=
     DESK_PORT=/dev/ttyUSB0    (optional: by default /dev/desk-display if the udev rule made it, else this)
     DESK_DEBUG=1              (optional: as --debug, also for the service)
+    DESK_TALPY_CODE=          (optional: the folder of Talpy Den's jump.py, for a tap on a chat; by default
+                               the Plasma widget's, the GNOME extension's or the newest VS Code extension's)
 
 Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
 - jobs and usage: from $XDG_RUNTIME_DIR/talpy-den/jobs.json, which Talpy Den writes whenever a chat's
@@ -30,6 +32,9 @@ Each message is one JSON line with a "type" (see src/app/serial_link.cpp):
   monitor, else read every 2 s), at once when it changes and before the jobs whenever everything is sent: locked,
   the board shows the clock and no chat's name.
 - ping: when nothing else went out for 10 s: the board takes the PC for away after 60 s of silence.
+- opened: the answer to the board's {"type":"open","id":...} (a chat tapped on it): only an id that is exactly one
+  of the jobs file's, while unlocked, goes to Talpy Den's jump.py --job (one at a time, on a thread, 15 s at
+  most), which brings that chat to the front as a click on its row in Talpy Den does.
 When the board restarts (it prints "Setup done") or the port comes back, everything is sent again.
 What the board prints goes to this script's output (the journal, for the service): its errors and
 "PC back/away", and with DESK_DEBUG 1 in platformio.ini every message it got as well.
@@ -60,6 +65,9 @@ WEATHER_EVERY = 900  # s between weather fetches
 WEATHER_RETRY = 30   # s after a failed fetch till the next try (doubling each time, up to WEATHER_EVERY)
 PING_EVERY = 10      # s of silence before a ping
 LOCK_READ_EVERY = 2  # s between reads of the session's lock while gdbus monitor isn't there to say
+JUMP_TIMEOUT = 15    # s Talpy Den's jump.py gets to bring a chat up (the board waits 20 s for the answer)
+REQUEST_MAX = 1024   # bytes of a board's line that can be a request; a longer one is only logged
+ID_MAX = 300         # characters of a jobs file id (Talpy Den's jump.py --job takes no longer)
 USAGE_ROWS = 2       # accounts the board's usage card has room for
 MAX_LINE = 8000      # bytes of a jobs message: the board drops a longer line whole (SERIAL_LINE_MAX, serial_link.cpp)
 MAX_JOBS = 64        # jobs in a jobs message: what the board follows for its alerts (SEEN_MAX, job_watch.c)
@@ -460,6 +468,115 @@ def send_everything(board, tz, locked, send_jobs, weather):
         board.send("hourly", **weather[1])
 
 
+# ---------- a tap on a chat ----------
+#
+# The board prints {"type":"open","id":"<id>"} when a chat is tapped (its row, or "Open on PC" on an alert). This
+# script answers {"type":"opened","id":...,"ok":...,"message":...} after Talpy Den's jump.py --job brought it to the
+# front (or said why not). The board's line is only trusted to name a chat: an id that isn't exactly one of the
+# jobs file's, or that a jobs file id can't be (ID_BAD), runs nothing; the rest goes to jump.py as one argument,
+# never through a shell, and jump.py again only looks it up.
+
+ID_BAD = re.compile(r"""[\s"'\\;|&$`<>]""")
+TALPY_CODE = (".local/share/plasma/plasmoids/org.wzaielamri.talpyden/contents/code",
+              ".local/share/gnome-shell/extensions/talpy-den@wzaielamri.github.io/code")
+NOT_LISTED = "That chat isn't listed any more"
+
+
+def id_ok(job_id):
+    """Whether job_id can be a jobs file id: printable ASCII, at most ID_MAX, no blank, quote, backslash or shell
+    character, no "..", not starting with "-" (Talpy Den's jump.py checks the same)."""
+    return (isinstance(job_id, str) and 0 < len(job_id) <= ID_MAX and job_id.isascii() and job_id.isprintable()
+            and not ID_BAD.search(job_id) and ".." not in job_id and not job_id.startswith("-"))
+
+
+def board_request(line):
+    """The id of a board's open line; None for anything else (a log line, another type, a non-string id, a line
+    over REQUEST_MAX bytes, not a JSON object)."""
+    if len(line.encode()) > REQUEST_MAX or not line.startswith("{"):
+        return None
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(msg, dict) or msg.get("type") != "open" or not isinstance(msg.get("id"), str):
+        return None
+    return msg["id"]
+
+
+def code_folder(env, home):
+    """The folder of Talpy Den's jump.py: DESK_TALPY_CODE, else the Plasma widget's, the GNOME extension's, or the
+    newest VS Code extension's; None without one."""
+    if env.get("DESK_TALPY_CODE"):
+        mine = Path(env["DESK_TALPY_CODE"]).expanduser()
+        return mine if (mine / "jump.py").is_file() else None
+    for folder in TALPY_CODE:
+        if (home / folder / "jump.py").is_file():
+            return home / folder
+
+    def version(path):  # (.../wzaielamri.talpy-den-1.21.0/vendor/code/jump.py -> (1, 21, 0))
+        name = path.parent.parent.parent.name.rsplit("-", 1)[-1]
+        return tuple(int(n) if n.isdigit() else -1 for n in name.split("."))
+    found = sorted((home / ".vscode/extensions").glob("wzaielamri.talpy-den-*/vendor/code/jump.py"), key=version)
+    return found[-1].parent if found else None
+
+
+def jump_command(code, job_id):
+    """Talpy Den's jump.py bringing up the chat of job_id: a list (no shell), the id one word of its own."""
+    return ["python3", "-I", str(code / "jump.py"), "--job", job_id]
+
+
+def handle_open(job_id, listed, locked, code, opener):
+    """An open from the board: (ok, message) to answer at once, or None when opener runs jump.py (its answer comes
+    from opener.results)."""
+    if not id_ok(job_id) or job_id not in listed:
+        return False, NOT_LISTED
+    if locked:
+        return False, "The PC is locked"
+    if code is None:
+        return False, "Talpy Den not found"
+    if not opener.start(job_id, code):
+        return False, "Still opening the last one"
+    return None
+
+
+def jump_answer(done):
+    """(ok, message) from jump.py's run: its JSON line; a jump.py without --job prints its usage and fails."""
+    try:
+        answer = json.loads((done.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        answer = None
+    if done.returncode != 0 or not isinstance(answer, dict):
+        if "usage:" in (done.stderr or ""):
+            return False, "Talpy Den is too old for this"
+        return False, "Talpy Den couldn't open it"
+    return bool(answer.get("ok")), str(answer.get("message") or "")
+
+
+class Opener:
+    """Runs jump.py for one open at a time on a thread of its own, so a slow one holds up nothing; each answer goes
+    to results as (job_id, ok, message), the message plain ASCII and at most 80 characters (it's shown on a row)."""
+
+    def __init__(self, run=subprocess.run):
+        self.run, self.results, self.thread = run, queue.Queue(), None
+
+    def start(self, job_id, code):
+        if self.thread is not None and self.thread.is_alive():
+            return False
+        self.thread = threading.Thread(target=self._open, args=(job_id, code), daemon=True)
+        self.thread.start()
+        return True
+
+    def _open(self, job_id, code):
+        try:
+            ok, message = jump_answer(self.run(jump_command(code, job_id), capture_output=True, text=True,
+                                               timeout=JUMP_TIMEOUT, stdin=subprocess.DEVNULL))
+        except subprocess.TimeoutExpired:
+            ok, message = False, "Talpy Den took too long"
+        except OSError:
+            ok, message = False, "Talpy Den not found"
+        self.results.put((job_id, ok, plain(message)[:80]))
+
+
 # ---------- made-up examples (--demo) ----------
 
 def demo_rows(n, now):
@@ -563,11 +680,20 @@ def main():
         worker.start()
     next_time = next_weather = 0.0
     lock = LockWatch()
+    opener = Opener()
+    listed = set()  # the jobs file's ids (send_jobs)
+
+    def answer(job_id, ok, message):
+        print(f"open {job_id}: {'ok' if ok else 'failed'} {message}".rstrip())
+        board.send("opened", id=job_id, ok=bool(ok), message=message)
 
     def send_jobs(force=False):
+        nonlocal listed
         data = read_jobs(path)
         if data is None:
             return
+        # (the ids a tap may open: exactly those of the jobs file)
+        listed = {job["id"] for job in data.get("jobs") or [] if isinstance(job, dict) and isinstance(job.get("id"), str)}
         for type_, key, build in (("jobs", "rows", jobs_rows), ("usage", "accounts", usage_accounts)):
             try:
                 fields = {key: build(data)}
@@ -594,9 +720,17 @@ def main():
             if lock.poll():
                 board.send("lock", locked=lock.locked)
             for line in board.lines():
-                print("board:", line)
-                if line == "Setup done":  # it restarted: it knows nothing
-                    send_all()
+                job_id = board_request(line)
+                if job_id is None:
+                    print("board:", line)
+                    if line == "Setup done":  # it restarted: it knows nothing
+                        send_all()
+                    continue
+                now_answer = handle_open(job_id, listed, lock.locked, code_folder(os.environ, Path.home()), opener)
+                if now_answer is not None:
+                    answer(job_id, *now_answer)
+            while not opener.results.empty():
+                answer(*opener.results.get())
 
             now = time.time()
             if now >= next_time:
