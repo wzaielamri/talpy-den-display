@@ -146,7 +146,9 @@ class LockTests(unittest.TestCase):
         sent = []
         board = types.SimpleNamespace(send=lambda type_, **fields: sent.append(type_))
         sync.send_everything(board, "CET-1", True, lambda: board.send("jobs"), None)
-        self.assertEqual(sent[:3], ["time", "lock", "jobs"])
+        # (the very first message: a board back from the PC being away takes the lock before the PC counts as
+        # back, so a laptop locked meanwhile never unlocks it for a moment)
+        self.assertEqual(sent[:3], ["lock", "time", "jobs"])
 
 
 LOCAL_ID = ".claude-work/0b1c2d3e-aaaa-bbbb-cccc-1234567890ab/live"

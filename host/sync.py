@@ -463,10 +463,11 @@ class LockWatch:
 
 
 def send_everything(board, tz, locked, send_jobs, weather):
-    """What a board that knows nothing needs, the lock before any chat's name: the time, the lock, the jobs and
-    usage (send_jobs), and the weather if fetched."""
-    board.send("time", epoch=int(time.time()), tz=tz)
+    """What a board that knows nothing needs, the lock before any chat's name: the lock, the time, the jobs and
+    usage (send_jobs), and the weather if fetched. The lock is the very first message: a board that took the PC
+    for away is locked, and the first message back unlocks it unless it is a lock that says otherwise."""
     board.send("lock", locked=bool(locked))
+    board.send("time", epoch=int(time.time()), tz=tz)
     send_jobs()
     if weather:
         board.send("weather", **weather[0])

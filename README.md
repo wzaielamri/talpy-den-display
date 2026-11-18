@@ -41,17 +41,20 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
   shorter one when a chat finishes (15 s). Talpy peeks over the top of the box: with his sign for a
   waiting chat, jumping in confetti for a finished one. **Open on PC** next to OK brings that chat to
   the front on the laptop, as a tap on its row does.
-- **Locked laptop:** while your laptop's screen is locked, the display shows the clock and stays there:
-  no chat names, no alerts, a touch doesn't bring the cards back. Unlock it and the cards come back,
-  with the waiting alert you hadn't seen yet (also one the lock hid).
+- **Locked or away laptop:** while your laptop's screen is locked, or the laptop is away (unplugged,
+  asleep, off, or `sync.py` not running: no message for 60 s), the display shows the clock and stays
+  there: no chat names, no alerts, a touch doesn't bring the cards back. So a board left on the desk
+  shows nothing of your chats once you take the laptop with you. Unlock it (and plug it back in) and the
+  cards come back, with the waiting alert you hadn't seen yet (also one the lock hid).
 - **Plan usage:** the 5-hour and 7-day windows of up to two accounts, with their reset times. As in
   Talpy Den, a bar is green, orange from 70% and red from 90%.
 - **Weather:** now, today's high and low, and the next 8 hours with rain chances, from
   [Open-Meteo](https://open-meteo.com/) (no API key needed). Talpy acts out the weather: sunglasses in
   the sun, an umbrella in the rain, a beanie and scarf in the snow, asleep under the moon, ducked into
   his burrow in a thunderstorm. He stands in front of a live sky that moves with the weather (ten
-  pictures in all), calmer than the banner's Talpy. While the PC is away, the card follows the
-  forecast for the current hour and Talpy hides in his burrow, with only his antenna light showing.
+  pictures in all), calmer than the banner's Talpy. While the PC is away (the clock face, then), the
+  weather follows the forecast for the current hour and Talpy hides in his burrow, with only his antenna
+  light showing.
 - **Brightness:** swipe down from the top for the brightness slider and a **Stay on** toggle. The
   board remembers both after a restart. Between about 12% and 99% the backlight hums quietly: its
   controller dims it by switching it on and off at an audible rate, which the code can't change.
@@ -61,7 +64,7 @@ Talpy Den writes the chats and usage to a small JSON file whenever something cha
   shows the clock while the PC is away (no message for 60 s), and while the laptop is locked, so a
   board on a powered hub can stay on day and night. The clock moves a few pixels each minute so nothing
   burns in. Double-tap the screen (anywhere but the weather card and the list of chats) to show it right
-  away. Touch it to come back (not while the laptop is locked). It shows the time,
+  away. Touch it to come back (not while the laptop is locked or away). It shows the time,
   the date, the weather (a slower weather Talpy and the temperature) and a line about your chats
   ("All quiet", "2 finished chats"). While the PC is away, the chat line gives way to "PC offline".
 
@@ -138,8 +141,8 @@ To skip `sync.py`, send the board one JSON object per line (under 8 KB) at 11520
 | `usage` | `accounts`: `name`, `plan`, `five_hour`, `seven_day` (%), `five_hour_resets`, `seven_day_resets` | when they change |
 | `weather` | `temp`, `code` ([WMO](https://open-meteo.com/en/docs)), `day`, `hi`, `lo`, `updated` | every 15 min |
 | `hourly` | `summary`, `updated`, `hours`: `at`, `temp`, `code`, `day`, `rain` | every 15 min |
-| `power` | `state: "sleep"`: the PC is going away, show the clock | |
-| `lock` | `locked` (`true`/`false`): the laptop's screen is locked: the clock, no chat names, no alerts | at the start (before `jobs`) and when it changes |
+| `power` | `state: "sleep"`: the PC is going away: the clock, as when locked | |
+| `lock` | `locked` (`true`/`false`): the laptop's screen is locked: the clock, no chat names, no alerts | first at the start, and when it changes |
 | `opened` | `id`, `ok`, `message`: the answer to the board's `open` | after each `open` |
 | `ping` | | after 10 s with nothing else sent |
 
@@ -157,7 +160,8 @@ Talpy Den isn't installed as the Plasma widget, the GNOME extension or the VS Co
 
 - `sync.py` makes one network call: the weather from Open-Meteo, with your latitude and longitude.
 - Chat names go to the board as plain ASCII, and the board's log shows them, so `journalctl` does too.
-- While the laptop is locked, the screen shows no chat names (the board still gets them, as before).
+- While the laptop is locked or away, the screen shows no chat names (the board still keeps the last
+  ones it got, and gets them while locked, as before).
 - A tap on a chat sends its id to the PC, and the PC answers what happened ("Opened", or why not):
   never a prompt, a reply or what a chat asks. The id runs nothing by itself: it's only compared with
   the jobs file and then with what Talpy Den lists.

@@ -15,7 +15,7 @@ extern "C" {
 // A job that stops waiting (you answered it) or goes takes its waiting alert away.
 void job_watch_update(const job_info_t *jobs, int n);
 
-// The laptop locked (true) or unlocked. Locked, no alert shows (an alert shows a chat's name): the one
+// The board locked (true; app/board_lock.h: the laptop locked, or the PC away) or unlocked. Locked, no alert shows (an alert shows a chat's name): the one
 // showing goes, and the jobs go on being followed. A waiting alert not closed with OK is owed: the one the
 // lock hid, and one for each job that starts waiting meanwhile. Unlocked, the owed job asking longest gets
 // its waiting alert, if it still waits; finished alerts from meanwhile are dropped.

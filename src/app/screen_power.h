@@ -9,9 +9,9 @@ extern "C" {
 // What the screen shows and how bright, 24/7. Never dark, and the LCD always refreshed:
 // - the cards (at the slider's brightness) while someone looks: a touch in the last 2 min, a job
 //   waiting for you, or "Stay on" (a job working doesn't keep them: one can work for hours);
-// - else the clock face (ui/clock_face.c), dimmed to 10% (where the backlight doesn't hum), and always while
-//   the PC is away (no message for a while: suspended, shut down, unplugged), or at once after a double
-//   tap on the cards. A touch on it brings the cards back for 2 min.
+// - else the clock face (ui/clock_face.c), dimmed to 10% (where the backlight doesn't hum), or at once after a
+//   double tap on the cards. A touch on it brings the cards back for 2 min;
+// - and only the clock face while the board is locked (app/board_lock.h: the laptop locked, or the PC away).
 // The brightness and "Stay on" are saved (app/settings.cpp) and come back after a restart.
 
 // After screen_main_create(): the saved brightness and "Stay on" back, and the timer started.
@@ -20,7 +20,7 @@ void screen_power_init(void);
 // The brightness slider's value (0..100): set now, and saved once the slider is still.
 void screen_power_set_brightness(int32_t percent);
 
-// "Stay on" in the pull-down panel: the cards stay (but not while the PC is away), saved.
+// "Stay on" in the pull-down panel: the cards stay (but not while the board is locked), saved.
 void screen_power_set_stay_on(bool on);
 
 // Whether any job is waiting for you (serial_link.cpp, from each jobs message). While one is, the
@@ -30,15 +30,11 @@ void screen_power_set_busy(bool on);
 // The cards now, for 2 min at least (a touch, an alert, the PC back).
 void screen_power_wake(void);
 
-// The laptop locked (true): the clock face, and it stays (a touch, a job waiting, "Stay on" or the PC coming
-// back don't bring the cards) till it's unlocked (false: the cards, as after a touch). It outlasts the PC going
-// away; a board that restarts starts unlocked (sync.py says otherwise within a second). Not saved.
+// The board locked (true; app/board_lock.c says when: the laptop locked, or the PC away): the clock face, and
+// it stays (a touch, a job waiting or "Stay on" don't bring the cards) till it's unlocked (false: the cards, as
+// after a touch). A board that restarts starts unlocked (sync.py says otherwise within a second). Not saved.
 void screen_power_set_locked(bool locked);
 bool screen_power_locked(void);
-
-// The PC is there (a message came in after a while without) or away (none for a while, or it said
-// it suspends): away, the clock face, and an alert that shows goes.
-void screen_power_pc_present(bool present);
 
 #ifdef __cplusplus
 } /*extern "C"*/

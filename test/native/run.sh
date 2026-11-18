@@ -30,5 +30,6 @@ run_test test_banner_text src/ui/banner_text.c
 run_test test_weather_view src/ui/weather_view.c
 run_test test_job_order src/ui/job_order.c
 run_test test_job_watch src/app/job_watch.c
+run_test test_board_lock src/app/board_lock.c
 
 exit $failed

@@ -12,6 +12,7 @@
 #include "ui/header_pc.h"
 #include "ui/clock_face.h"
 #include "app/screen_power.h"
+#include "app/board_lock.h"
 #include "app/pc_open.h"
 #include "debug_log.h"
 
@@ -164,7 +165,8 @@ static void handle_hourly(JsonDocument &doc) {
 // ---------- is the PC there? ----------
 
 // No whole message for this long: the PC is away (suspended, shut down, unplugged, or sync.py not
-// running): "PC offline", and the board goes dark and naps. sync.py sends something at least every
+// running): "PC offline", and the board locks as for a locked laptop (app/board_lock.h: the clock face, no
+// chat's name, a touch doesn't bring the cards back). sync.py sends something at least every
 // 10 s (a {"type":"ping"} does) to stay there; 60 s leaves room for a slow check or a restart.
 #define PC_AWAY_MS 60000
 
@@ -174,14 +176,14 @@ static uint32_t last_seen;    // millis() of the last whole message
 static void set_pc_online(bool online) {
     if (online == pc_online) return;
     pc_online = online;
+    board_lock_pc(online);
     header_pc_set_online(online);
     clock_face_set_pc(online);
     weather_state_pc(online);
-    screen_power_pc_present(online);
     Serial.printf("PC %s\n", online ? "back" : "away");
 }
 
-// {"type":"power","state":"sleep"} when the PC is about to suspend or shut down: dark and napping at
+// {"type":"power","state":"sleep"} when the PC is about to suspend or shut down: away (the clock, locked) at
 // once, not PC_AWAY_MS later. Its next message (any) brings the board back.
 static void handle_power(JsonDocument &doc) {
     const char *state = doc["state"] | "";
@@ -189,19 +191,13 @@ static void handle_power(JsonDocument &doc) {
     else if (strcmp(state, "wake") != 0) Serial.println("bad power: state sleep or wake");
 }
 
-// {"type":"lock","locked":true} when the laptop locks, false when it unlocks (sync.py, from logind; and in what
-// it sends at its start). Locked: the clock face, no alert, nothing that shows a chat's name; unlocked: the
-// cards, then the waiting alert you hadn't seen (job_watch.c). The board starts unlocked.
+// {"type":"lock","locked":true} when the laptop locks, false when it unlocks (sync.py, from logind; and first in
+// what it sends at its start). Locked: the clock face, no alert, nothing that shows a chat's name; unlocked (and
+// the PC there): the cards, then the waiting alert you hadn't seen (job_watch.c). The board starts unlocked.
 static void handle_lock(JsonDocument &doc) {
     if (!doc["locked"].is<bool>()) { Serial.println("bad lock: needs locked"); return; }
     bool locked = doc["locked"].as<bool>();
-    if (locked) {
-        job_watch_set_locked(true); // (first: a waiting alert showing is owed, then it goes)
-        screen_power_set_locked(true);
-    } else {
-        screen_power_set_locked(false); // (first the cards, then the owed alert over them)
-        job_watch_set_locked(false);
-    }
+    board_lock_laptop(locked);
     debug_printf("lock(%d)\n", locked);
 }
 
@@ -222,6 +218,10 @@ static void handle_line(const char *line) {
     }
     const char *type = doc["type"] | "";
     last_seen = millis();
+    // A lock message counts before the PC does: back from away with its laptop locked now, the board never
+    // unlocks in between (sync.py sends the lock first, before any chat's name).
+    bool is_lock = strcmp(type, "lock") == 0;
+    if (is_lock) handle_lock(doc);
     if (strcmp(type, "power") != 0) { // a whole message: the PC is there
         static bool heard;            // (the header starts "PC offline": its first message says connected)
         if (!heard) {
@@ -239,7 +239,7 @@ static void handle_line(const char *line) {
     else if (strcmp(type, "jobs") == 0)    handle_jobs(doc);
     else if (strcmp(type, "usage") == 0)   handle_usage(doc);
     else if (strcmp(type, "hourly") == 0)  handle_hourly(doc);
-    else if (strcmp(type, "lock") == 0)    handle_lock(doc);
+    else if (is_lock)                      {} // (handled first, above)
     else if (strcmp(type, "opened") == 0)  handle_opened(doc);
     else Serial.printf("unknown type: \"%s\"\n", type);
 }

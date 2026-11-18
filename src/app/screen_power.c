@@ -2,7 +2,6 @@
 #include "app/settings.h"
 #include "drivers/backlight.h"
 #include "lvgl.h"
-#include "ui/alert.h"
 #include "ui/card_brightness.h"
 #include "ui/card_hourly.h"
 #include "ui/card_jobs.h"
@@ -21,8 +20,8 @@
 static int32_t brightness = 100; // the slider's value
 static bool stay_on;
 static bool busy;                // a job waits for you: the cards stay
-static bool pc_away;
-static bool locked;              // the laptop is locked: the clock face, and nothing brings the cards back
+static bool locked;              // the laptop is locked or the PC away (app/board_lock.h): the clock face, and
+                                 // nothing brings the cards back
 static bool clock_shown;
 static lv_timer_t *save_timer;
 
@@ -86,20 +85,9 @@ void screen_power_set_busy(bool on) {
     if (on == busy) return;
     busy = on;
     if (on) {
-        if (!pc_away) screen_power_wake(); // a job waits for you: the cards, to show it
+        screen_power_wake(); // a job waits for you: the cards, to show it (not while locked: the PC away too)
     } else {
         lv_display_trigger_activity(NULL); // none waits any more: the cards 2 min more, to see how it went
-    }
-}
-
-void screen_power_pc_present(bool present) {
-    if (present == !pc_away) return;
-    pc_away = !present;
-    if (pc_away) {
-        alert_hide(); // (its job's PC is gone: an alert left up would sit dimmed on the screen all night)
-        show_clock(true);
-    } else {
-        screen_power_wake();
     }
 }
 
@@ -120,8 +108,8 @@ bool screen_power_locked(void) {
 
 static void tick(lv_timer_t *timer) {
     LV_UNUSED(timer);
-    // (the PC away: its jobs can't be known, and "Stay on" doesn't keep the cards for a laptop that's gone)
-    if (!clock_shown && (pc_away || (!stay_on && !busy)) && lv_display_get_inactive_time(NULL) > CLOCK_AFTER_MS)
+    // (the PC away needs nothing here: the board is locked then, the clock already up)
+    if (!clock_shown && !stay_on && !busy && lv_display_get_inactive_time(NULL) > CLOCK_AFTER_MS)
         show_clock(true);
 }
 
